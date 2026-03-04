@@ -55,6 +55,10 @@ const Navbar = () => {
             Login
           </NavLink>
 
+            <NavLink
+              to="/signup"
+              className="bg-white/20 px-4 py-1 rounded-full hover:bg-white/30 transition"
+            >Sign up</NavLink>
         </div>
 
       </GlassCard>

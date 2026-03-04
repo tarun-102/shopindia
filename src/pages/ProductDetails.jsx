@@ -1,12 +1,20 @@
 import { useLoaderData, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux"; // Redux hook
+import { cartActions } from "../store/slices/CartSlice";
 import GlassCard from "../components/ui/GlassCard";
 import { formatPrice } from "../utils/priceFormatter";
 
 const ProductDetails = () => {
   const product = useLoaderData();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  // Agar reviews kam hain, toh hum extra dummy reviews add kar dete hain taaki page khali na lage
+  // Redux function to add item
+  const handleAddToCart = () => {
+    dispatch(cartActions.addToCart(product));
+    alert(`${product.title} has been added to your ShopIndia cart! 🛒`);
+  };
+
   const extraReviews = [
     { reviewerName: "Rahul Sharma", rating: 5, comment: "Value for money! Ahmedabad mein 2 din mein delivery mil gayi.", date: new Date().toISOString() },
     { reviewerName: "Priya Patel", rating: 4, comment: "Quality is top notch. ShopIndia is best.", date: new Date().toISOString() }
@@ -62,13 +70,18 @@ const ProductDetails = () => {
 
           {/* Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
-            <button className="bg-white/10 border border-white/20 text-white font-bold py-4 rounded-2xl hover:bg-white/20 transition-all flex justify-center items-center gap-2">
+            <button 
+              onClick={handleAddToCart} // Using Redux logic here
+              className="bg-white/10 border border-white/20 text-white font-bold py-4 rounded-2xl hover:bg-white/20 transition-all flex justify-center items-center gap-2"
+            >
               Add to Cart 🛒
             </button>
             
-            {/* Buy Now Button - Yeh seedha checkout par le jayega */}
             <button 
-              onClick={() => navigate('/cart')}
+              onClick={() => {
+                handleAddToCart(); // Add to cart first
+                navigate('/cart'); // Then go to cart
+              }}
               className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black py-4 rounded-2xl hover:from-yellow-300 hover:to-orange-400 transition-all shadow-xl shadow-yellow-500/20 flex justify-center items-center gap-2"
             >
               Buy Now ⚡
@@ -77,10 +90,43 @@ const ProductDetails = () => {
         </div>
       </GlassCard>
 
+      {/* ================= NEW: GLASS EFFECT REVIEW FORM ================= */}
+      <section>
+        <GlassCard className="p-8 border-white/10">
+          <h2 className="text-2xl font-black text-white mb-6">Leave Your Review ✍️</h2>
+          <form className="space-y-4" onSubmit={(e) => {
+            e.preventDefault();
+            alert("This review will be saved to Firebase soon!");
+          }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input 
+                type="text" 
+                placeholder="Your Name" 
+                className="bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-400 transition"
+                required
+              />
+              <select className="bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-400 transition">
+                <option value="5" className="bg-gray-900">⭐⭐⭐⭐⭐ (Excellent)</option>
+                <option value="4" className="bg-gray-900">⭐⭐⭐⭐ (Good)</option>
+                <option value="3" className="bg-gray-900">⭐⭐⭐ (Average)</option>
+              </select>
+            </div>
+            <textarea 
+              placeholder="What did you like or dislike about this product?" 
+              className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white h-32 outline-none focus:border-yellow-400 transition"
+              required
+            ></textarea>
+            <button className="bg-yellow-400 text-black font-black px-10 py-3 rounded-xl hover:bg-yellow-300 transition-all">
+              Submit Real Review
+            </button>
+          </form>
+        </GlassCard>
+      </section>
+
       {/* Reviews Section */}
       <div className="space-y-8">
         <h2 className="text-3xl font-black text-white border-b border-white/10 pb-4">
-          What Customers Say 🗣️
+          Customer Reviews 🗣️
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -95,7 +141,7 @@ const ProductDetails = () => {
                   <p className="text-yellow-500 text-xs">{"★".repeat(Math.round(rev.rating))}</p>
                 </div>
               </div>
-              <p className="text-white/70 text-sm italic  leading-relaxed">"{rev.comment}"</p>
+              <p className="text-white/70 text-sm italic leading-relaxed">"{rev.comment}"</p>
             </GlassCard>
           ))}
         </div>

@@ -1,14 +1,14 @@
 import { useLoaderData } from "react-router-dom";
-
 import ProductCard from "../components/ui/ProductCard";
 import CategoryCard from "../components/ui/CategoryCard";
-
 import { category } from "../utils/categories";
+
 
 const Home = () => {
 
   const products = useLoaderData();
-
+    
+  
   // Top 4 products
   const topProducts = products.slice(0, 4);
 
@@ -19,7 +19,7 @@ const Home = () => {
       <section className="bg-white/10 rounded-2xl p-10 text-center">
 
         <h1 className="text-4xl font-bold mb-3">
-          Welcome to ShopIndia 🇮🇳
+          Welcome to ShopIndia.in
         </h1>
 
         <p className="text-white/70">

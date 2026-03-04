@@ -1,7 +1,11 @@
 import GlassCard from "./GlassCard";
 import { formatPrice } from "../../utils/priceFormatter";
 import { Link } from "react-router-dom";
+
+
+
 function ProductCard({ product }) {
+
   return (
     <Link to={`/product/${product.id}`}>
           <GlassCard className="p-4 hover:scale-105 transition-transform duration-300 flex flex-col justify-between h-full">
@@ -19,7 +23,7 @@ function ProductCard({ product }) {
         </p>
       </div>
 
-      <button className="mt-4 w-full bg-white/10 border border-white/20 py-2 rounded-lg hover:bg-yellow-400 hover:text-black transition-all font-medium">
+      <button className="mt-4 w-full bg-white/10 border border-white/20 py-2 rounded-lg hover:bg-yellow-400 hover:text-black transition-all font-medium"  >
         Add to Cart 🛒
       </button>
     </GlassCard>
