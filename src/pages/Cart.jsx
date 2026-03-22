@@ -1,5 +1,5 @@
 import { useSelector, useDispatch } from "react-redux";
-import { cartActions } from '../store/slices/cartSlice';
+import { addToCart,removeFromCart,clearCart } from '../store/slices/cartSlice';
 import GlassCard from "../components/ui/GlassCard";
 import { formatPrice } from "../utils/priceFormatter";
 import { useNavigate } from "react-router-dom";
@@ -51,7 +51,7 @@ const Cart = () => {
                 {/* Quantity Controls */}
                 <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10">
                   <button 
-                    onClick={() => dispatch(cartActions.removeFromCart(item.id))}
+                    onClick={() => dispatch(removeFromCart(item.id))}
                     className="w-10 h-10 rounded-xl bg-white/10 text-white hover:bg-red-500/50 transition-colors font-bold text-xl"
                   >
                     −
@@ -60,7 +60,7 @@ const Cart = () => {
                     {item.quantity}
                   </span>
                   <button 
-                    onClick={() => dispatch(cartActions.addToCart(item))}
+                    onClick={() => dispatch(addToCart(item))}
                     className="w-10 h-10 rounded-xl bg-white/10 text-white hover:bg-green-500/50 transition-colors font-bold text-xl"
                   >
                     +

@@ -1,6 +1,6 @@
 import { useLoaderData, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux"; // Redux hook
-import { cartActions } from "../store/slices/CartSlice";
+import { addToCart } from "../store/slices/CartSlice";
 import GlassCard from "../components/ui/GlassCard";
 import { formatPrice } from "../utils/priceFormatter";
 
@@ -11,7 +11,7 @@ const ProductDetails = () => {
 
   // Redux function to add item
   const handleAddToCart = () => {
-    dispatch(cartActions.addToCart(product));
+    dispatch(addToCart(product));
     alert(`${product.title} has been added to your ShopIndia cart! 🛒`);
   };
 

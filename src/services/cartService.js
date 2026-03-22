@@ -1,7 +1,7 @@
 import {doc, setDoc,getDoc} from 'firebase/firestore';
 import { db } from './firebase';
 
-export const saveCartToDb = async (uid,cartData) =>{
+export const saveCartToDB = async (uid,cartData) =>{
     try{
         await setDoc(doc(db, "cart",uid), cartData)
     }catch(error){
