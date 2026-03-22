@@ -1,15 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit';
 
-// LocalStorage se data nikalne ka function
-const loadCartFromStorage = () => {
-    const savedCart = localStorage.getItem('cartItems');
-    if (savedCart) {
-        return JSON.parse(savedCart);
-    }
-    return { items: [], totalQuantity: 0, totalAmount: 0 };
-};
 
-const initialState = loadCartFromStorage();
+
+const initialState = {items: [], totalQuantity: 0 ,totalAmount: 0,}
 
 const cartSlice = createSlice({
     name: 'cart',
@@ -56,18 +49,17 @@ const cartSlice = createSlice({
                 existingItem.totalPrice -= existingItem.price;
             }
 
-            // --- LOCAL STORAGE SET ITEM ---
-            localStorage.setItem('cartItems', JSON.stringify(state));
+            
         },
 
         clearCart(state) {
             state.items = [];
             state.totalQuantity = 0;
             state.totalAmount = 0;
-            localStorage.removeItem('cartItems'); // Clear storage on order
+            
         }
     },
 });
 
 export const cartActions = cartSlice.actions;
-export default cartSlice;
+export default cartSlice.reducer;
