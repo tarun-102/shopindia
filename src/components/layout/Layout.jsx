@@ -8,7 +8,7 @@ import { auth } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice";
 import { saveCartToDB, getCartFromDB } from "../../services/cartService";
-import { setCartFromDB, clearCart } from "../../store/slices/cartSlice";
+import { setCartFromDB, clearCart } from "../../store/slices/CartSlice";
 
 const Layout = () => {
 
