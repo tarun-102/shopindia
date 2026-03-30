@@ -14,21 +14,25 @@ import ProtectedRoutes from "../components/ProtectedRoutes";
 import { getAllProducts, getProductById } from "../services/productservices";
 import ProductDetails from "../pages/ProductDetails";
 import Loader from "../components/ui/Loader";
+import CategoryPage from "../pages/CategoryPage";
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" element={<Layout />}>
       <Route index element={<Home />}
         loader={getAllProducts}
       />
-    
+
       <Route element={<ProtectedRoutes />}>
         <Route path="cart" element={<Cart />} />
         <Route path="profile" element={<Profile />} />
         <Route path="admin" element={<Admin />} />
-              <Route
-        path="product/:id" element={<ProductDetails />}
-        loader={getProductById}
-      />
+        <Route
+          path="product/:id" element={<ProductDetails />}
+          loader={getProductById}
+        />
+
+        <Route path="category/:categoryName" element={<CategoryPage />} />
+
       </Route>
       <Route path="login" element={<Login />} />
 

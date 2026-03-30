@@ -1,16 +1,18 @@
-import GlassCard from "./GlassCard"
+import { Link } from "react-router-dom";
 
-function CategoryCard({category}) {
+const CategoryCard = ({ category }) => {
   return (
-    <GlassCard className="p-4 text-center cursor-pointer hover:scale-105 transition">
-        <div className="text-4xl mb-2">
-            {category.icon}
-        </div>
-          <p className="font-semibold">
+    
+    <Link 
+      to={`/category/${category.value}`} 
+      className="bg-white/10 hover:bg-white/20 border border-white/10 hover:border-yellow-400 backdrop-blur-md rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all hover:scale-105 shadow-xl cursor-pointer text-center"
+    >
+      <span className="text-4xl md:text-5xl">{category.icon}</span>
+      <h3 className="text-white font-bold text-sm md:text-base tracking-wide">
         {category.name}
-      </p>
-    </GlassCard>
-  )
-}
+      </h3>
+    </Link>
+  );
+};
 
-export default CategoryCard
+export default CategoryCard;

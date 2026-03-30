@@ -1,27 +1,27 @@
-export const category =   [
-    {
-        id: 1,
-        name: "Electronic",
-        icon: "📱"
-    },
-    {
-    id: 2,
-    name: "Fashion",
-    icon: "👕",
-  },
-  {
-    id: 3,
-    name: "Jewellery",
-    icon: "💍",
-  },
-  {
-    id: 4,
-    name: "Shoes",
-    icon: "👟",
-  },
-  {
-    id: 5,
-    name: "Home",
-    icon: "🏠",
-  },
-]
+export const category = [
+  { id: 1, name: "Smartphones & Accessories", value: "smartphones", icon: "📱" },
+  { id: 2, name: "Laptops & Computers", value: "laptops", icon: "💻" },
+  { id: 3, name: "Tablets & E-readers", value: "tablets", icon: "📲" },
+  { id: 4, name: "Audio, Earbuds & Headphones", value: "audio", icon: "🎧" },
+  { id: 5, name: "Smartwatches & Wearables", value: "wearables", icon: "⌚" },
+  { id: 6, name: "Cameras & Photography", value: "cameras", icon: "📸" },
+  { id: 7, name: "Gaming Consoles & Accessories", value: "gaming", icon: "🎮" },
+  { id: 8, name: "TV & Home Entertainment", value: "tv-appliances", icon: "📺" },
+  { id: 9, name: "Men's Clothing", value: "mens-clothing", icon: "👕" },
+  { id: 10, name: "Women's Clothing", value: "womens-clothing", icon: "👗" },
+  { id: 11, name: "Kids' Clothing & Toys", value: "kids-clothing", icon: "🧸" },
+  { id: 12, name: "Men's Footwear", value: "mens-shoes", icon: "👞" },
+  { id: 13, name: "Women's Footwear", value: "womens-shoes", icon: "👠" },
+  { id: 14, name: "Home Appliances (AC, Fridge)", value: "home-appliances", icon: "🏠" },
+  { id: 15, name: "Kitchen Appliances", value: "kitchen-appliances", icon: "🍳" },
+  { id: 16, name: "Home Decor & Furniture", value: "furniture", icon: "🛏️" },
+  { id: 17, name: "Groceries & Daily Essentials", value: "groceries", icon: "🥫" },
+  { id: 18, name: "Beauty & Personal Care", value: "beauty", icon: "💄" },
+  { id: 19, name: "Health & Wellness", value: "health", icon: "💊" },
+  { id: 20, name: "Sports, Fitness & Outdoors", value: "sports", icon: "🏏" },
+  { id: 21, name: "Automotive & Bike Accessories", value: "automotive", icon: "🚗" },
+  { id: 22, name: "Books & Stationery", value: "books", icon: "📚" },
+  { id: 23, name: "Luggage & Travel Bags", value: "travel", icon: "🧳" },
+  { id: 24, name: "Pet Supplies", value: "pets", icon: "🐕" },
+  { id: 25, name: "Musical Instruments", value: "musical-instruments", icon: "🎸" }
+];

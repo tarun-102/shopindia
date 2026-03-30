@@ -3,24 +3,24 @@ import { NavLink, useNavigate } from "react-router-dom";
 import GlassCard from "../ui/GlassCard"; 
 import { logoutUser } from "../../services/auth/authService";
 
-// 🔥 Redux aur Firebase ke naye imports
+
 import { useSelector, useDispatch } from "react-redux";
-import { auth } from "../../services/firebase"; // Apna firebase ka path check kar lena
+import { auth } from "../../services/firebase"; 
 import { onAuthStateChanged } from "firebase/auth";
-import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice"; // Path check kar lena
+import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice"; 
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch(); // Redux mein data bhejney ke liye
+  const dispatch = useDispatch(); 
 
   const user = useSelector((state) => state.auth.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // 🕵️‍♂️ YAHAN HUMNE JASOOS KO NAVBAR MEIN HI FIT KAR DIYA
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        // Login hote hi data Redux mein bhejo
+        
         dispatch(loginUserRedux({
           uid: currentUser.uid,
           email: currentUser.email,

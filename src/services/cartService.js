@@ -11,7 +11,7 @@ export const saveCartToDB = async (uid,cartData) =>{
 
 export const getCartFromDB = async (uid) => {
     try {
-        const docSnap = await getDoc(doc(db, "carts", uid));
+        const docSnap = await getDoc(doc(db, "cart", uid));
         if (docSnap.exists()) {
             return docSnap.data(); 
         }

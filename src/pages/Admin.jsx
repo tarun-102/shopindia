@@ -1,103 +1,266 @@
-import GlassCard from "../components/ui/GlassCard";
+import { useState, useEffect } from "react";
+import { 
+  addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB,
+  getAllOrders, cancelOrderInDB, deleteOrderFromDB 
+} from "../services/productservices";
 import { formatPrice } from "../utils/priceFormatter";
 
 const Admin = () => {
-  
-  const recentOrders = [
-    { id: "ORD-9821", customer: "Rahul Sharma", date: "28 Feb 2026", amount: 4500, status: "Delivered" },
-    { id: "ORD-9822", customer: "Priya Patel", date: "27 Feb 2026", amount: 1250, status: "Processing" },
-    { id: "ORD-9823", customer: "Amit Singh", date: "26 Feb 2026", amount: 8900, status: "Shipped" },
-    { id: "ORD-9824", customer: "Neha Gupta", date: "25 Feb 2026", amount: 3200, status: "Delivered" },
-    { id: "ORD-9825", customer: "Vikram Verma", date: "24 Feb 2026", amount: 750, status: "Cancelled" },
-  ];
+  const [activeTab, setActiveTab] = useState("products"); 
 
-  // Status ke hisaab se color change karne ka logic
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Delivered": return "bg-green-500/20 text-green-400 border-green-500/30";
-      case "Processing": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-      case "Shipped": return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-      case "Cancelled": return "bg-red-500/20 text-red-400 border-red-500/30";
-      default: return "bg-white/10 text-white border-white/20";
+  const [product, setProduct] = useState({ title: "", price: "", category: "", thumbnail: "", description: "", });
+  const [productsList, setProductsList] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [ordersList, setOrdersList] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const [alertData, setAlertData] = useState({ show: false, message: "", icon: "" });
+
+  // 🔥 NAYA JADOO: Custom Confirm Box State
+  const [confirmDialog, setConfirmDialog] = useState({
+    show: false,
+    id: null,
+    actionType: "", // "CANCEL_ORDER", "DELETE_ORDER", ya "DELETE_PRODUCT"
+    message: ""
+  });
+
+  const showCustomAlert = (message, icon) => {
+    setAlertData({ show: true, message, icon });
+    setTimeout(() => setAlertData({ show: false, message: "", icon: "" }), 5000); 
+  };
+
+  useEffect(() => {
+    fetchProducts();
+    fetchOrders(); 
+  }, []);
+
+  const fetchProducts = async () => setProductsList(await getAllProducts());
+  const fetchOrders = async () => setOrdersList(await getAllOrders());
+
+  const handleChange = (e) => setProduct({ ...product, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);  
+    const productData = { ...product, price: Number(product.price) };
+    
+    if (editingId) {
+      if (await updateProductInDB(editingId, productData)) {
+        showCustomAlert("Product Updated Successfully!", "🛠️");
+        setEditingId(null); 
+      }
+    } else {
+      if (await addProductToDB(productData)) showCustomAlert("New Product Added Successfully!", "🔥");
+    }
+    
+    setProduct({ title: "", price: "", category: "", thumbnail: "", description: "" });
+    fetchProducts();
+    setLoading(false);
+  };
+
+  const handleEdit = (item) => {
+    setProduct(item);
+    setEditingId(item.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ================= 🔥 CUSTOM CONFIRM LOGIC =================
+  
+  // 1. Buttons dabane par default alert nahi, balki humara state update hoga
+  const triggerCancelOrder = (id) => setConfirmDialog({ show: true, id, actionType: "CANCEL_ORDER", message: "Are you sure you want to CANCEL this order?" });
+  const triggerDeleteOrder = (id) => setConfirmDialog({ show: true, id, actionType: "DELETE_ORDER", message: "Delete this order record permanently? This cannot be undone!" });
+  const triggerDeleteProduct = (id) => setConfirmDialog({ show: true, id, actionType: "DELETE_PRODUCT", message: "Are you sure you want to delete this Product? 🚀" });
+
+  
+  const executeConfirmAction = async () => {
+    const { id, actionType } = confirmDialog;
+    
+    // Popup band karo pehle
+    setConfirmDialog({ show: false, id: null, actionType: "", message: "" });
+
+    // Jo action type hoga, wo function chalega
+    if (actionType === "CANCEL_ORDER") {
+      if (await cancelOrderInDB(id)) {
+        showCustomAlert("Order Cancelled by Admin!", "🚫");
+        fetchOrders(); 
+      }
+    } else if (actionType === "DELETE_ORDER") {
+      if (await deleteOrderFromDB(id)) {
+        showCustomAlert("Order Record Deleted!", "🗑️");
+        fetchOrders();
+      }
+    } else if (actionType === "DELETE_PRODUCT") {
+      await deleteProductFromDB(id);
+      fetchProducts();
+      showCustomAlert("Product Deleted Successfully!", "🗑️");
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-10">
+    <div className="max-w-6xl mx-auto mt-10 p-4 md:p-6 bg-white/10 backdrop-blur-md rounded-2xl shadow-xl text-white relative">
       
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-            Admin Dashboard 🛠️
-          </h1>
-          <p className="text-white/50 mt-1">ShopIndia ke saare operations yahan manage karein.</p>
+      {/* ================= 🔥 CUSTOM GLASS ALERT ================= */}
+      {alertData.show && (
+        <div className="fixed top-24 right-5 md:right-10 z-[100] animate-bounce">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl px-6 py-4 rounded-2xl flex items-center gap-3 text-white">
+            <span className="text-2xl">{alertData.icon}</span>
+            <p className="font-bold tracking-wide">{alertData.message}</p>
+          </div>
         </div>
-        <button className="bg-white/10 border border-white/20 text-white px-6 py-2 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all font-bold">
-          Logout
+      )}
+
+      {/* ================= 🛑 CUSTOM CONFIRMATION POPUP (MODAL) ================= */}
+      {confirmDialog.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-gray-900/90 border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)] p-8 rounded-3xl max-w-md w-full text-center scale-up">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h3 className="text-2xl font-black text-white mb-2">Are you sure?</h3>
+            <p className="text-gray-400 mb-8 leading-relaxed">{confirmDialog.message}</p>
+            
+            <div className="flex gap-4 justify-center">
+              <button 
+                onClick={() => setConfirmDialog({ show: false, id: null, actionType: "", message: "" })}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition"
+              >
+                No, Go Back
+              </button>
+              <button 
+                onClick={executeConfirmAction}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-500/30 transition"
+              >
+                Yes, Do it!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-4xl font-black mb-8 text-center text-yellow-400 uppercase tracking-widest">
+        Admin Dashboard 👑
+      </h2>
+
+      {/* ================= 🟢 TABS BUTTONS ================= */}
+      <div className="flex justify-center gap-4 mb-10 border-b border-white/10 pb-4">
+        <button 
+          onClick={() => setActiveTab("products")}
+          className={`px-8 py-3 rounded-xl font-bold transition-all ${activeTab === "products" ? "bg-yellow-400 text-black scale-105" : "bg-white/10 text-white hover:bg-white/20"}`}
+        >
+          📦 Manage Products
+        </button>
+        <button 
+          onClick={() => setActiveTab("orders")}
+          className={`px-8 py-3 rounded-xl font-bold transition-all ${activeTab === "orders" ? "bg-yellow-400 text-black scale-105" : "bg-white/10 text-white hover:bg-white/20"}`}
+        >
+          🛒 Manage Orders
         </button>
       </div>
 
-      {/* Stats Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <GlassCard className="p-6 border-l-4 border-l-yellow-400">
-          <p className="text-white/60 text-sm font-bold uppercase tracking-wider mb-2">Total Revenue</p>
-          <h2 className="text-4xl font-black text-white">₹ {formatPrice(125400)}</h2>
-          <p className="text-green-400 text-sm font-bold mt-2">↑ 12% from last month</p>
-        </GlassCard>
+      {/* ================= 📦 TAB 1: PRODUCTS ================= */}
+      {activeTab === "products" && (
+        <div className="animate-fade-in">
+          <form onSubmit={handleSubmit} className={`flex flex-col gap-4 mb-10 p-6 rounded-lg border ${editingId ? 'bg-blue-900/40 border-blue-500' : 'bg-black/40 border-gray-600'}`}>
+            <h3 className={`text-xl font-bold ${editingId ? 'text-blue-400' : 'text-green-400'}`}>
+              {editingId ? "Update Product 🛠️" : "Add New Product ➕"}
+              {editingId && <button type="button" onClick={() => {setEditingId(null); setProduct({ title: "", price: "", category: "", thumbnail: "", description: "" });}} className="ml-4 text-sm text-red-400 underline">Cancel Edit</button>}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input type="text" name="title" value={product.title} onChange={handleChange} required placeholder="Product Title" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
+              <input type="number" name="price" value={product.price} onChange={handleChange} required placeholder="Price (₹)" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
+              <select name="category" value={product.category} onChange={handleChange} required className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none text-gray-800">
+                <option value="" disabled>Select Category 🔽</option>
+                <option value="smartphones">📱 Smartphones & Accessories</option>
+                <option value="laptops">💻 Laptops & Computers</option>
+                <option value="mens-clothing">👕 Men's Clothing</option>
+                <option value="womens-clothing">👗 Women's Clothing</option>
+                <option value="gaming">🎮 Gaming Consoles</option>
+              </select>
+              <input type="text" name="thumbnail" value={product.thumbnail} onChange={handleChange} required placeholder="Image URL (Transparent PNG)" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
+              <textarea name="description" value={product.description} onChange={handleChange} required rows="2" placeholder="Description..." className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none md:col-span-2"></textarea>
+            </div>
+            <button type="submit" disabled={loading} className={`mt-4 text-black font-bold py-3 rounded-lg transition ${editingId ? 'bg-blue-400 hover:bg-blue-500' : 'bg-yellow-400 hover:bg-yellow-500'}`}>
+              {loading ? "Processing... ⏳" : (editingId ? "Update Product 🚀" : "Add Product 🚀")}
+            </button>
+          </form>
 
-        <GlassCard className="p-6 border-l-4 border-l-blue-400">
-          <p className="text-white/60 text-sm font-bold uppercase tracking-wider mb-2">Total Orders</p>
-          <h2 className="text-4xl font-black text-white">342</h2>
-          <p className="text-green-400 text-sm font-bold mt-2">↑ 5 new today</p>
-        </GlassCard>
+          {/* PRODUCT LIST */}
+          <div className="bg-black/40 rounded-lg border border-gray-600 overflow-hidden">
+            {productsList.map((item) => (
+              <div key={item.id} className="p-4 flex justify-between items-center hover:bg-white/5 border-b border-gray-700">
+                <div className="flex gap-4 items-center">
+                  <img src={item.thumbnail} alt="" className="w-12 h-12 object-contain bg-white/5 rounded" />
+                  <div>
+                    <h4 className="font-bold">{item.title}</h4>
+                    <p className="text-yellow-400">₹{item.price}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleEdit(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 rounded font-bold">Edit</button>
+                  {/* 🔥 FIX: Custom trigger for deleting product */}
+                  <button onClick={() => triggerDeleteProduct(item.id)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded font-bold">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-        <GlassCard className="p-6 border-l-4 border-l-purple-400">
-          <p className="text-white/60 text-sm font-bold uppercase tracking-wider mb-2">Active Users</p>
-          <h2 className="text-4xl font-black text-white">1,204</h2>
-          <p className="text-white/40 text-sm font-bold mt-2">Currently online: 45</p>
-        </GlassCard>
-      </div>
-
-      {/* Recent Orders Table */}
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-white">Recent Orders 📦</h2>
-        
-        <GlassCard className="overflow-x-auto border-white/10 p-0">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white/5 border-b border-white/10 text-white/60 text-sm uppercase tracking-wider">
-                <th className="p-4 font-bold">Order ID</th>
-                <th className="p-4 font-bold">Customer</th>
-                <th className="p-4 font-bold">Date</th>
-                <th className="p-4 font-bold">Total Amount</th>
-                <th className="p-4 font-bold">Status</th>
-                <th className="p-4 font-bold text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10">
-              {recentOrders.map((order, index) => (
-                <tr key={index} className="hover:bg-white/5 transition-colors">
-                  <td className="p-4 text-white font-bold">{order.id}</td>
-                  <td className="p-4 text-white/90">{order.customer}</td>
-                  <td className="p-4 text-white/60 text-sm">{order.date}</td>
-                  <td className="p-4 text-yellow-400 font-bold">₹ {formatPrice(order.amount)}</td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(order.status)}`}>
+      {/* ================= 🛒 TAB 2: ORDERS ================= */}
+      {activeTab === "orders" && (
+        <div className="space-y-6 animate-fade-in">
+          {ordersList.length === 0 ? (
+            <p className="text-center text-gray-400 py-10">Koi order nahi aaya abhi tak! 😢</p>
+          ) : (
+            ordersList.map((order) => (
+              <div key={order.id} className="bg-black/40 border border-gray-600 p-6 rounded-xl flex flex-col md:flex-row justify-between gap-6 hover:border-yellow-400/50 transition">
+                
+                <div className="flex-1">
+                  <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono">{order.id}</span></p>
+                  <p className="text-sm text-gray-400">User ID: <span className="text-blue-400">{order.userId}</span></p>
+                  <p className="text-sm text-gray-400">Date: <span className="text-white">{new Date(order.date).toLocaleString('en-IN')}</span></p>
+                  
+                  <div className="mt-3">
+                    <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === "Cancelled 🔴" ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
                       {order.status}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button className="text-white/50 hover:text-yellow-400 transition-colors font-bold text-sm underline underline-offset-4">
-                      View
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {order.items.map((item, idx) => (
+                      <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">
+                        {item.quantity}x {item.title.substring(0, 15)}...
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-start md:items-end justify-between">
+                  <p className="text-2xl font-black text-yellow-400">₹ {formatPrice(order.totalAmount)}</p>
+                  
+                  <div className="flex gap-2 mt-4">
+                    {order.status !== "Cancelled 🔴" && (
+                      <button 
+                        /* 🔥 FIX: Custom trigger for cancelling order */
+                        onClick={() => triggerCancelOrder(order.id)}
+                        className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition"
+                      >
+                        Cancel Order
+                      </button>
+                    )}
+                    <button 
+                      /* 🔥 FIX: Custom trigger for deleting order */
+                      onClick={() => triggerDeleteOrder(order.id)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition"
+                    >
+                      Delete
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </GlassCard>
-      </div>
+                  </div>
+                </div>
+
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
     </div>
   );

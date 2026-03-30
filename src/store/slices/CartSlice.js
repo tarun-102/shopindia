@@ -2,7 +2,12 @@ import { createSlice } from '@reduxjs/toolkit';
 
 
 
-const initialState = {items: [], totalQuantity: 0 ,totalAmount: 0,}
+const initialState = {
+    items: [],
+    totalQuantity: 0,
+    totalAmount: 0,
+    isCartLoaded: false,
+}
 
 const cartSlice = createSlice({
     name: 'cart',
@@ -62,6 +67,7 @@ const cartSlice = createSlice({
             state.items = action.payload?.items || [];
             state.totalQuantity = action.payload?.totalQuantity || 0;
             state.totalAmount = action.payload?.totalAmount || 0;
+            state.isCartLoaded = true;
         },
     },
 });
