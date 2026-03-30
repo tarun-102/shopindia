@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { addToCart, removeFromCart, clearCart } from '../store/slices/cartSlice';
+import { addToCart, removeFromCart, clearCart } from '../store/slices/CartSlice';
 import GlassCard from "../components/ui/GlassCard";
 import { formatPrice } from "../utils/priceFormatter";
 import { useNavigate } from "react-router-dom";
