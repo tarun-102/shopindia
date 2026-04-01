@@ -5,7 +5,7 @@ import {
 } from "../services/productservices";
 import { formatPrice } from "../utils/priceFormatter";
 
-// 🔥 AAPKI POORI 25 CATEGORIES LIST
+
 export const categoriesList = [
   { id: 1, name: "Smartphones & Accessories", value: "smartphones", icon: "📱" },
   { id: 2, name: "Laptops & Computers", value: "laptops", icon: "💻" },
