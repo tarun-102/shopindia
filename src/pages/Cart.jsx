@@ -11,7 +11,6 @@ import { placeOrderInDB } from "../services/productservices";
 import { onAuthStateChanged } from "firebase/auth";
 
 const Cart = () => {
-  
   const cartItems = useSelector((state) => state.cart.items);
   const totalAmount = useSelector((state) => state.cart.totalAmount);
   const totalQuantity = useSelector((state) => state.cart.totalQuantity);
@@ -21,10 +20,13 @@ const Cart = () => {
 
   // States
   const [isProcessing, setIsProcessing] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false); // 🔥 NAYA: Big Success Screen ke liye
+  const [orderSuccess, setOrderSuccess] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [createdOrderId, setCreatedOrderId] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState("card");
+  const [placedOrderInfo, setPlacedOrderInfo] = useState(null);
+  const [shippingData, setShippingData] = useState({ name: "", address: "", pincode: "" });
 
-  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -43,25 +45,46 @@ const Cart = () => {
       return;
     }
 
-    setIsProcessing(true); // Processing button
+    if (!shippingData.name || !shippingData.address || !shippingData.pincode) {
+      alert("Please enter complete shipping details before placing your order.");
+      return;
+    }
 
-    
+    setIsProcessing(true);
+
     setTimeout(async () => {
       const newOrder = {
-        userId: currentUser.uid, 
+        userId: currentUser.uid,
         items: cartItems,
         totalAmount: totalAmount,
-        status: "Order Confirmed 🟢",
-        date: new Date().toISOString()
+        paymentMethod,
+        status: "Pending ⏳", // 🔥 Naya order "Pending ⏳" status ke sath save hoga taaki 1-minute cancel window aur delivery boy request work kare
+        date: new Date().toISOString(),
+        shipping: {
+          name: shippingData.name,
+          address: shippingData.address,
+          pincode: shippingData.pincode,
+        },
       };
 
-      await placeOrderInDB(newOrder); // Database  save
-      dispatch(clearCart()); // Cart vlear
-      
-      setIsProcessing(false); 
-      setOrderSuccess(true); // 🔥 BIG SUCCESS SCREEN 
-      
-      
+      const orderId = await placeOrderInDB(newOrder); // Database save
+      if (orderId) {
+        setCreatedOrderId(orderId);
+        setPlacedOrderInfo({
+          orderId,
+          paymentMethod,
+          items: cartItems,
+          totalAmount,
+          shipping: { ...shippingData },
+          createdAt: new Date().toLocaleString(),
+        });
+      }
+
+      dispatch(clearCart()); // Cart clear
+      setShippingData({ name: "", address: "", pincode: "" });
+      setIsProcessing(false);
+      setOrderSuccess(true);
+
       setTimeout(() => {
         navigate('/profile'); 
       }, 5000); 
@@ -69,16 +92,46 @@ const Cart = () => {
     }, 2000); 
   };
 
-  
   if (orderSuccess) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center animate-fade-in">
-        <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center text-6xl animate-bounce shadow-[0_0_50px_rgba(34,197,94,0.6)]">
-          ✅
+      <div className="min-h-[70vh] flex flex-col items-center justify-center animate-fade-in px-4 text-center">
+        <div className="w-28 h-28 bg-green-500/95 rounded-full flex items-center justify-center text-6xl animate-pulse shadow-[0_0_60px_rgba(16,185,129,0.45)]">
+          🎉
         </div>
-        <h2 className="text-4xl font-black text-white mt-8 mb-2">Payment Successful!</h2>
-        <p className="text-gray-400 text-lg">Your order has been securely placed.</p>
-        <p className="text-yellow-400 mt-6 animate-pulse">Redirecting to your orders... 🚀</p>
+        <h2 className="text-4xl font-black text-white mt-8 mb-2">Order Confirmed!</h2>
+        <p className="text-gray-300 text-lg max-w-xl">
+          Your payment was successful and the order has been placed.
+          We are now preparing it for delivery.
+        </p>
+
+        <div className="mt-10 w-full max-w-3xl bg-black/50 border border-white/10 rounded-3xl p-8 text-left shadow-xl">
+          <h3 className="text-2xl font-bold text-white mb-4">Receipt</h3>
+          <div className="grid gap-3 text-sm text-gray-300">
+            <div className="flex justify-between"><span>Order ID</span><span className="text-white font-semibold">{createdOrderId}</span></div>
+            <div className="flex justify-between"><span>Payment Method</span><span className="text-white font-semibold">{placedOrderInfo?.paymentMethod === 'card' ? 'Credit / Debit Card' : placedOrderInfo?.paymentMethod === 'upi' ? 'UPI Payment' : 'Cash on Delivery'}</span></div>
+            <div className="flex justify-between"><span>Amount Paid</span><span className="text-green-400 font-bold">₹ {formatPrice(placedOrderInfo?.totalAmount || 0)}</span></div>
+            <div className="flex justify-between"><span>Order Date</span><span className="text-white/80">{placedOrderInfo?.createdAt}</span></div>
+            <div className="pt-4 border-t border-white/10">
+              <p className="text-white font-semibold mb-2">Shipping Address</p>
+              <p>{placedOrderInfo?.shipping?.name}</p>
+              <p>{placedOrderInfo?.shipping?.address}</p>
+              <p>PIN: {placedOrderInfo?.shipping?.pincode}</p>
+            </div>
+            <div className="pt-4 border-t border-white/10">
+              <p className="text-white font-semibold mb-2">Items</p>
+              <div className="space-y-2">
+                {placedOrderInfo?.items?.map((item) => (
+                  <div key={item.id} className="flex justify-between bg-white/5 p-3 rounded-2xl">
+                    <span>{item.quantity}× {item.title}</span>
+                    <span className="font-semibold">₹ {formatPrice(item.totalPrice)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-yellow-400 mt-6 font-semibold">Redirecting to your orders page... 🚀</p>
       </div>
     );
   }
@@ -136,30 +189,63 @@ const Cart = () => {
               <form className="space-y-4" onSubmit={handlePlaceOrder}>
                 <div className="space-y-3">
                   <p className="text-white/60 text-sm font-bold ml-1">Delivery Address</p>
-                  {/* 🔥 FIX: Asli User ka Naam yahan apne aap aayega! */}
                   <input 
                     type="text" 
-                    defaultValue={currentUser?.displayName || ""} 
-                    placeholder="Full Name" 
+                    name="name"
+                    value={shippingData.name}
+                    onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
+                    placeholder="Recipient Name" 
                     className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-400 transition" 
                     required 
                   />
                   <textarea 
+                    name="address"
+                    value={shippingData.address}
+                    onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
                     placeholder="House No., Street, Landmark" 
                     className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white h-24 outline-none focus:border-yellow-400 transition" 
                     required 
                   ></textarea>
                   <input 
                     type="text" 
+                    name="pincode"
+                    value={shippingData.pincode}
+                    onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
                     placeholder="Pincode" 
                     className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-yellow-400 transition" 
                     required 
                   />
                 </div>
 
+                <div className="space-y-4">
+                  <p className="text-white/60 text-sm font-bold ml-1">Payment Method</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("card")}
+                      className={`rounded-2xl px-4 py-3 border transition ${paymentMethod === "card" ? "border-yellow-400 bg-yellow-400/10 text-white" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"}`}
+                    >
+                      Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("upi")}
+                      className={`rounded-2xl px-4 py-3 border transition ${paymentMethod === "upi" ? "border-yellow-400 bg-yellow-400/10 text-white" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"}`}
+                    >
+                      UPI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("cod")}
+                      className={`rounded-2xl px-4 py-3 border transition ${paymentMethod === "cod" ? "border-yellow-400 bg-yellow-400/10 text-white" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"}`}
+                    >
+                      Cash on Delivery
+                    </button>
+                  </div>
+                </div>
+
                 <div className="pt-6 border-t border-white/10 mt-6 space-y-3">
                   <div className="flex justify-between text-white/60">
-                    {/* 🔥 Hook error wala issue yahan fixed hai */}
                     <span>Items ({totalQuantity}):</span>
                     <span>₹ {formatPrice(totalAmount)}</span>
                   </div>
@@ -182,7 +268,7 @@ const Cart = () => {
                     : 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black hover:scale-[1.02] active:scale-[0.98] shadow-yellow-500/20'
                   }`}
                 >
-                  {isProcessing ? "Processing Payment... 💳" : "Pay Securely ⚡"}
+                  {isProcessing ? "Processing Payment... 💳" : `Pay with ${paymentMethod === 'card' ? 'Card' : paymentMethod === 'upi' ? 'UPI' : 'Cash on Delivery'}`}
                 </button>
               </form>
             </GlassCard>

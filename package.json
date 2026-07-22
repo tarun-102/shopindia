@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",
+    "baseline-browser-mapping": "^2.11.0",
+    "caniuse-lite": "^1.0.30001806",
     "firebase": "^12.10.0",
     "persist": "^0.2.7",
     "react": "^19.2.0",

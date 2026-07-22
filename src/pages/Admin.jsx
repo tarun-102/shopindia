@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { 
   addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB,
-  getAllOrders, cancelOrderInDB, deleteOrderFromDB 
+  getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB 
 } from "../services/productservices";
 import { formatPrice } from "../utils/priceFormatter";
 
@@ -39,12 +40,45 @@ const Admin = () => {
 
   const [product, setProduct] = useState({ title: "", price: "", category: "", thumbnail: "", description: "", });
   const [productsList, setProductsList] = useState([]);
+  const [productsError, setProductsError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [ordersList, setOrdersList] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState("");
+  const [productsPage, setProductsPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const user = useSelector((state) => state.auth.user);
+  const userRole = useSelector((state) => state.auth.role);
 
   const [alertData, setAlertData] = useState({ show: false, message: "", icon: "" });
   const [confirmDialog, setConfirmDialog] = useState({ show: false, id: null, actionType: "", message: "" });
+
+  const activeDeliveryOrders = ordersList.filter((order) => order.status === "Order Confirmed 🟢" || order.status === "Out for Delivery 🚚");
+  const deliveredOrders = ordersList.filter((order) => order.status === "Delivered ✅");
+
+  const productsPerPage = 6;
+  const ordersPerPage = 5;
+  const totalProductPages = Math.max(1, Math.ceil(productsList.length / productsPerPage));
+  const totalOrderPages = Math.max(1, Math.ceil(ordersList.length / ordersPerPage));
+  const paginatedProducts = productsList.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
+  const paginatedOrders = ordersList.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+
+  const getOrderAge = (date) => {
+    try {
+      const diff = Date.now() - new Date(date).getTime();
+      return Math.max(Math.floor(diff / 60000), 0);
+    } catch {
+      return 0;
+    }
+  };
+
+  const updateOrderStatus = async (orderId, status, message, icon) => {
+    if (await updateOrderStatusInDB(orderId, status)) {
+      showCustomAlert(message, icon);
+      fetchOrders();
+    }
+  };
 
   const showCustomAlert = (message, icon) => {
     setAlertData({ show: true, message, icon });
@@ -53,11 +87,65 @@ const Admin = () => {
 
   useEffect(() => {
     fetchProducts();
-    fetchOrders(); 
   }, []);
 
-  const fetchProducts = async () => setProductsList(await getAllProducts());
-  const fetchOrders = async () => setOrdersList(await getAllOrders());
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    if (userRole === "admin") {
+      fetchOrders();
+    } else {
+      setOrdersLoading(false);
+      setOrdersError("Access denied: Admin role required to view orders.");
+    }
+  }, [user, userRole]);
+
+  useEffect(() => {
+    if (activeTab === "orders" && userRole === "admin") {
+      fetchOrders();
+    }
+  }, [activeTab, userRole]);
+
+  const fetchProducts = async () => {
+    setProductsError("");
+    try {
+      const products = await getAllProducts();
+      setProductsList(products);
+      setProductsPage(1);
+      if (products.length === 0) {
+        setProductsError("No products found. Please add products or check the database collection.");
+      }
+    } catch (error) {
+      console.error("Failed to fetch products:", error);
+      setProductsError(error?.message || "Unable to load products at this time.");
+      setProductsList([]);
+    }
+  };
+
+  const fetchOrders = async () => {
+    setOrdersLoading(true);
+    setOrdersError("");
+    try {
+      console.log("Admin fetching orders from Firestore...");
+      const orders = await getAllOrders(user?.uid);
+      console.log("Fetched orders:", orders);
+      setOrdersList(orders);
+      setOrdersPage(1);
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+      const permError = error?.message?.toLowerCase().includes("permission-denied");
+      setOrdersError(
+        permError
+          ? "Firebase permission denied. Please check admin access and Firestore rules for the orders collection."
+          : error?.message || error?.code || "Unable to load orders at this time."
+      );
+      setOrdersList([]);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
   const handleChange = (e) => setProduct({ ...product, [e.target.name]: e.target.value });
 
@@ -95,9 +183,12 @@ const Admin = () => {
     setConfirmDialog({ show: false, id: null, actionType: "", message: "" });
 
     if (actionType === "CANCEL_ORDER") {
-      if (await cancelOrderInDB(id)) {
+      const result = await cancelOrderInDB(id, { isAdmin: true });
+      if (result.success) {
         showCustomAlert("Order Cancelled by Admin!", "🚫");
         fetchOrders(); 
+      } else {
+        showCustomAlert(result.error || "Order cancellation failed.", "⚠️");
       }
     } else if (actionType === "DELETE_ORDER") {
       if (await deleteOrderFromDB(id)) {
@@ -179,21 +270,49 @@ const Admin = () => {
 
           {/* PRODUCT LIST UI SAME REHEGA */}
           <div className="bg-black/40 rounded-lg border border-gray-600 overflow-hidden">
-            {productsList.map((item) => (
-              <div key={item.id} className="p-4 flex justify-between items-center hover:bg-white/5 border-b border-gray-700">
-                <div className="flex gap-4 items-center">
-                  <img src={item.thumbnail} alt="" className="w-12 h-12 object-contain bg-white/5 rounded" />
-                  <div>
-                    <h4 className="font-bold">{item.title}</h4>
-                    <p className="text-yellow-400">₹{item.price}</p>
+            {productsError ? (
+              <div className="p-10 text-center text-red-300">
+                <p className="font-bold">{productsError}</p>
+              </div>
+            ) : productsList.length === 0 ? (
+              <div className="p-10 text-center text-gray-400">
+                <p className="font-bold">No products available.</p>
+                <p className="mt-2">Add a product above to see it appear here.</p>
+              </div>
+            ) : (
+              <>
+                {paginatedProducts.map((item) => (
+                  <div key={item.id} className="p-4 flex justify-between items-center hover:bg-white/5 border-b border-gray-700">
+                    <div className="flex gap-4 items-center">
+                      <img src={item.thumbnail} alt="" className="w-12 h-12 object-contain bg-white/5 rounded" />
+                      <div>
+                        <h4 className="font-bold">{item.title}</h4>
+                        <p className="text-yellow-400">₹{item.price}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 rounded font-bold">Edit</button>
+                      <button onClick={() => triggerDeleteProduct(item.id)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded font-bold">Delete</button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-b-3xl border-t border-white/10">
+                  <span className="text-sm text-gray-400">Page {productsPage} of {totalProductPages}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setProductsPage((page) => Math.max(page - 1, 1))}
+                      disabled={productsPage === 1}
+                      className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Prev</button>
+                    <button
+                      onClick={() => setProductsPage((page) => Math.min(page + 1, totalProductPages))}
+                      disabled={productsPage === totalProductPages}
+                      className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >Next</button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handleEdit(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 rounded font-bold">Edit</button>
-                  <button onClick={() => triggerDeleteProduct(item.id)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded font-bold">Delete</button>
-                </div>
-              </div>
-            ))}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -201,20 +320,42 @@ const Admin = () => {
       {/* ORDERS TAB UI SAME REHEGA */}
       {activeTab === "orders" && (
         <div className="space-y-6 animate-fade-in">
-          {ordersList.length === 0 ? (
-            <p className="text-center text-gray-400 py-10">No orders have been placed yet.</p>
+          {ordersLoading ? (
+            <p className="text-center text-gray-400 py-10">Loading orders...</p>
+          ) : ordersError ? (
+            <div className="text-center text-red-400 py-10">
+              <p>{ordersError}</p>
+              {user && (
+                <p className="mt-4 text-sm text-yellow-200">
+                  Logged in as: {user.email} <span className="block">Role: {userRole || "unknown"}</span>
+                  {userRole === "admin" && " — Firebase rules must allow admin access to orders."}
+                </p>
+              )}
+              <button onClick={fetchOrders} className="mt-4 bg-yellow-400 text-black px-5 py-2 rounded-lg font-semibold">Retry</button>
+            </div>
+          ) : ordersList.length === 0 ? (
+            <div className="text-center text-gray-400 py-10">
+              <p>No orders have been placed yet.</p>
+              <button onClick={fetchOrders} className="mt-4 bg-yellow-400 text-black px-5 py-2 rounded-lg font-semibold">Refresh</button>
+            </div>
           ) : (
             <>
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
-                <div>
-                  <h3 className="text-2xl font-bold text-white">All Orders</h3>
-                  <p className="text-white/60">Total orders: {ordersList.length}</p>
+              <div className="grid gap-4 md:grid-cols-4 mb-6">
+                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
+                  <p className="text-sm uppercase tracking-widest text-white/60">Total Orders</p>
+                  <p className="text-4xl font-black mt-3">{ordersList.length}</p>
                 </div>
-                <div className="rounded-3xl bg-yellow-400/10 border border-yellow-400/20 px-6 py-3 text-yellow-300 font-semibold shadow-lg shadow-yellow-400/10">
-                  Latest orders appear first
+                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
+                  <p className="text-sm uppercase tracking-widest text-white/60">In Delivery</p>
+                  <p className="text-4xl font-black mt-3">{activeDeliveryOrders.length}</p>
                 </div>
+                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
+                  <p className="text-sm uppercase tracking-widest text-white/60">Delivered</p>
+                  <p className="text-4xl font-black mt-3">{deliveredOrders.length}</p>
+                </div>
+                <button onClick={fetchOrders} className="rounded-3xl border border-white/10 bg-yellow-400 text-black font-bold px-6 py-6 hover:bg-yellow-300 transition">Refresh Orders</button>
               </div>
-              {ordersList.map((order) => (
+              {paginatedOrders.map((order) => (
                 <div key={order.id} className="bg-black/40 border border-gray-600 p-6 rounded-xl flex flex-col md:flex-row justify-between gap-6 hover:border-yellow-400/50 transition">
                   <div className="flex-1">
                     <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono">{order.id}</span></p>
@@ -227,13 +368,29 @@ const Admin = () => {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">{item.quantity}x {item.title.substring(0, 15)}...</div>
+                        <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">{item.quantity}× {item.title.substring(0, 15)}...</div>
                       ))}
                     </div>
+                    <div className="mt-4 rounded-3xl bg-white/5 border border-white/10 p-4 text-sm text-gray-200 space-y-2">
+                      <p className="font-semibold text-white">Shipping Details</p>
+                      <p>{order.shipping?.name || "-"}</p>
+                      <p>{order.shipping?.address || "-"}</p>
+                      <p>PIN: {order.shipping?.pincode || "-"}</p>
+                      <p className="text-white/60">Placed {getOrderAge(order.date)} min ago</p>
+                    </div>
                   </div>
-                <div className="flex flex-col items-start md:items-end justify-between">
-                  <p className="text-2xl font-black text-yellow-400">₹ {formatPrice(order.totalAmount)}</p>
-                  <div className="flex gap-2 mt-4">
+                <div className="flex flex-col items-start md:items-end justify-between gap-4">
+                  <div className="space-y-2 text-right">
+                    <p className="text-2xl font-black text-yellow-400">₹ {formatPrice(order.totalAmount)}</p>
+                    <p className="text-sm text-gray-400">Items: {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)}</p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full md:w-auto">
+                    {order.status === "Order Confirmed 🟢" && (
+                      <button onClick={() => updateOrderStatus(order.id, "Out for Delivery 🚚", "Order sent to delivery!", "🚚")} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Send to Delivery</button>
+                    )}
+                    {order.status === "Out for Delivery 🚚" && (
+                      <button onClick={() => updateOrderStatus(order.id, "Delivered ✅", "Order delivered successfully!", "✅")} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Mark Delivered</button>
+                    )}
                     {order.status !== "Cancelled 🔴" && (
                       <button onClick={() => triggerCancelOrder(order.id)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Cancel Order</button>
                     )}
@@ -241,7 +398,23 @@ const Admin = () => {
                   </div>
                 </div>
               </div>
-            ))
+            ))}
+              <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-b-3xl border-t border-white/10">
+                <span className="text-sm text-gray-400">Page {ordersPage} of {totalOrderPages}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setOrdersPage((page) => Math.max(page - 1, 1))}
+                    disabled={ordersPage === 1}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >Prev</button>
+                  <button
+                    onClick={() => setOrdersPage((page) => Math.min(page + 1, totalOrderPages))}
+                    disabled={ordersPage === totalOrderPages}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >Next</button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}

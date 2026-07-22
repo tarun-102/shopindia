@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import GlassCard from "../ui/GlassCard"; 
 import { logoutUser } from "../../services/auth/authService";
 
@@ -9,21 +9,12 @@ import { logoutUserRedux } from "../../store/slices/authSlice";
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const dispatch = useDispatch(); 
 
   const user = useSelector((state) => state.auth.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isAdminUser = user?.role === "admin";
-  const showBackButton = location.pathname !== "/";
-
-  const goBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/");
-    }
-  };
+  const isDeliveryBoy = user?.role === "deliveryboy";
 
   const handleLogout = async () => {
     const result = await logoutUser();
@@ -46,12 +37,6 @@ const Navbar = () => {
           </h1>
           
           <div className="hidden md:flex gap-6 text-lg items-center">
-            {showBackButton && (
-              <button onClick={goBack} className="text-white hover:text-yellow-300 transition text-sm font-semibold py-2 px-3 rounded-full bg-white/5 border border-white/10">
-                ← Back
-              </button>
-            )}
-
             <NavLink to="/"
               className={({isActive}) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"} 
             >Home</NavLink>
@@ -78,6 +63,14 @@ const Navbar = () => {
                     className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
                   >
                     Admin
+                  </NavLink>
+                )}
+                {isDeliveryBoy && (
+                  <NavLink
+                    to="/delivery"
+                    className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                  >
+                    Delivery
                   </NavLink>
                 )}
 
@@ -124,13 +117,13 @@ const Navbar = () => {
             
             {user ? (
               <>
-                <button onClick={goBack} className="text-white hover:text-yellow-300 transition text-left font-semibold py-2 px-3 rounded-full bg-white/5 border border-white/10">
-                  ← Back
-                </button>
                 <NavLink to="/cart" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Cart 🛒</NavLink>
                 <NavLink to="/profile" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Profile 👤</NavLink>
                 {isAdminUser && (
                   <NavLink to="/admin" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Admin Dashboard</NavLink>
+                )}
+                {isDeliveryBoy && (
+                  <NavLink to="/delivery" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Delivery Panel</NavLink>
                 )}
                 <button 
                   onClick={handleLogout}

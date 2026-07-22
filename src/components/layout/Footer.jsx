@@ -33,7 +33,7 @@ const Footer = () => {
           </div>
         </div>
       </GlassCard>
-      <p className="text-center text-white/20 text-xs mt-8">© 2026 ShopIndia. Version 1.2</p>
+      <p className="text-center text-white/20 text-xs mt-8">© 2026 ShopIndia. Version 1.4</p>
     </footer>
   );
 };

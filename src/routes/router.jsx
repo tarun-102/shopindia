@@ -7,6 +7,7 @@ import Signup from "../pages/Signup";
 import Layout from "../components/layout/Layout";
 import Home from "../pages/Home";
 import Admin from "../pages/Admin";
+import DeliveryPanel from "../pages/DeliveryPanel";
 import Profile from "../pages/Profile";
 import Login from "../pages/Login";
 import Cart from "../pages/Cart";
@@ -25,7 +26,12 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoutes />}>
         <Route path="cart" element={<Cart />} />
         <Route path="profile" element={<Profile />} />
-        <Route path="admin" element={<Admin />} />
+        <Route element={<ProtectedRoutes requiredRole="admin" />}>
+          <Route path="admin" element={<Admin />} />
+        </Route>
+        <Route element={<ProtectedRoutes requiredRole="deliveryboy" />}>
+          <Route path="delivery" element={<DeliveryPanel />} />
+        </Route>
         <Route
           path="product/:id" element={<ProductDetails />}
           loader={getProductById}

@@ -31,7 +31,9 @@ const Login = () => {
     if (response.success) {
       if(response.role === "admin"){
         navigate("/admin")
-      }else{
+      } else if (response.role === "deliveryboy") {
+        navigate("/delivery");
+      } else {
         navigate("/");
       }
       

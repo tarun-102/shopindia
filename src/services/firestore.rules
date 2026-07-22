@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /cart/{cartId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == cartId;
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      allow read: if request.auth != null
+        && (
+          request.auth.uid == resource.data.userId ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
+            (
+              resource.data.status == 'Order Confirmed 🟢' ||
+              resource.data.status == 'Out for Delivery 🚚' ||
+              resource.data.assignedTo == request.auth.uid
+            )
+          )
+        );
+
+      allow update: if request.auth != null
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
+            (
+              (
+                (
+                  resource.data.status == 'Order Confirmed 🟢' ||
+                  resource.data.status == 'Out for Delivery 🚚'
+                ) &&
+                request.resource.data.status == 'Delivery Requested 🚚' &&
+                request.resource.data.assignedTo == request.auth.uid
+              ) ||
+              (
+                resource.data.status == 'Delivery Requested 🚚' &&
+                request.resource.data.status == 'Delivered ✅' &&
+                request.resource.data.assignedTo == request.auth.uid
+              )
+            )
+          )
+        );
+
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

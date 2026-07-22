@@ -1,14 +1,23 @@
 import { useSelector } from "react-redux";
-import { Navigate,Outlet } from "react-router-dom";
-import Loader from "./ui/Loader"
-import { useState } from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import Loader from "./ui/Loader";
 
-const ProtectedRoutes = () => {
-    const {user, isAuthReady} = useSelector((state) =>state.auth)
+const ProtectedRoutes = ({ requiredRole }) => {
+    const { user, role, isAuthReady } = useSelector((state) => state.auth);
 
-    if(!isAuthReady) {
-        return <Loader />
+    if (!isAuthReady) {
+        return <Loader />;
     }
-    return user ? <Outlet /> : <Navigate to="/login" ></Navigate>;
-}
+
+    if (!user) {
+        return <Navigate to="/login" />;
+    }
+
+    if (requiredRole && role !== requiredRole) {
+        return <Navigate to="/" />;
+    }
+
+    return <Outlet />;
+};
+
 export default ProtectedRoutes;
