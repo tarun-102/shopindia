@@ -4,8 +4,9 @@ import Footer from "./Footer";
 import { useEffect,useState } from "react";
 
 import { useDispatch, useSelector } from "react-redux";
-import { auth } from "../../services/firebase";
+import { auth, db } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice";
 import { saveCartToDB, getCartFromDB } from "../../services/cartService";
 import { setCartFromDB, clearCart } from "../../store/slices/CartSlice";
@@ -20,11 +21,22 @@ const Layout = () => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
+                let userRole = "customer";
+                try {
+                    const userDocRef = doc(db, "users", currentUser.uid);
+                    const userDocSnap = await getDoc(userDocRef);
+                    if (userDocSnap.exists()) {
+                        userRole = userDocSnap.data().role || "customer";
+                    }
+                } catch (error) {
+                    console.error("User role fetch error:", error);
+                }
+
                 dispatch(loginUserRedux({
                     uid: currentUser.uid,
                     email: currentUser.email,
+                    role: userRole,
                 }));
-
 
                 const dbCart = await getCartFromDB(currentUser.uid);
                 dispatch(setCartFromDB(dbCart));

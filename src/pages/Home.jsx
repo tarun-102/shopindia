@@ -20,12 +20,12 @@ const Home = () => {
     <div className="max-w-7xl mx-auto space-y-16">
 
       {/* ================= HERO ================= */}
-      <section className="bg-white/10 rounded-2xl p-10 text-center shadow-xl border border-white/10">
-        <h1 className="text-4xl font-bold mb-3 text-yellow-400">
-          Welcome to ShopIndia.in
+      <section className="bg-gradient-to-r from-white/10 via-white/5 to-white/10 rounded-3xl p-10 text-center shadow-[0_25px_80px_rgba(255,255,255,0.08)] border border-white/10 backdrop-blur-xl">
+        <h1 className="text-4xl md:text-5xl font-black mb-4 text-yellow-400">
+          Welcome to ShopIndia
         </h1>
-        <p className="text-white/70 font-semibold tracking-wide">
-          Best Deals • Fast Delivery • Trusted Store
+        <p className="text-white/70 font-semibold tracking-wide max-w-2xl mx-auto">
+          Best deals • fast delivery • trusted service — shop from anywhere with confidence.
         </p>
       </section>
 

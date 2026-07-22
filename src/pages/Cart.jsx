@@ -145,7 +145,7 @@ const Cart = () => {
                     required 
                   />
                   <textarea 
-                    placeholder="House No., Area, Landmark (Ahmedabad)" 
+                    placeholder="House No., Street, Landmark" 
                     className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white h-24 outline-none focus:border-yellow-400 transition" 
                     required 
                   ></textarea>

@@ -145,8 +145,8 @@ const Profile = () => {
       ) : orders.length === 0 ? (
         <GlassCard className="p-10 text-center">
           <span className="text-6xl block mb-4">🛒</span>
-          <h3 className="text-2xl font-bold text-white mb-2">No Orders Yet!</h3>
-          <p className="text-gray-400">Aapne abhi tak koi shopping nahi ki hai.</p>
+          <h3 className="text-2xl font-bold text-white mb-2">No Orders Yet</h3>
+          <p className="text-gray-400">You have not placed an order yet.</p>
         </GlassCard>
       ) : (
         <div className="space-y-6">

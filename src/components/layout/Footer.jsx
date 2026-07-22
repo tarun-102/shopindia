@@ -8,7 +8,7 @@ const Footer = () => {
         <div className="space-y-4">
           <h2 className="text-2xl font-black text-white">ShopIndia 💎</h2>
           <p className="text-white/50 text-sm leading-relaxed">
-            Ahmedabad se seedha aapke ghar tak. Best deals aur trusted products ka ek hi thikana.
+            Delivering quality products across India with reliable service and competitive prices.
           </p>
         </div>
 
@@ -24,8 +24,8 @@ const Footer = () => {
 
         {/* Social & Support */}
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-yellow-400">Follow Us</h3>
-          <p className="text-white/60 text-sm">Hamare naye updates ke liye jude rahein.</p>
+          <h3 className="text-lg font-bold text-yellow-400">Stay Connected</h3>
+          <p className="text-white/60 text-sm">Subscribe for product updates, offers, and new releases.</p>
           <div className="flex gap-4">
             <span className="bg-white/10 p-2 rounded-lg hover:bg-white/20 cursor-pointer transition">FB</span>
             <span className="bg-white/10 p-2 rounded-lg hover:bg-white/20 cursor-pointer transition">IG</span>
@@ -33,7 +33,7 @@ const Footer = () => {
           </div>
         </div>
       </GlassCard>
-      <p className="text-center text-white/20 text-xs mt-8">© 2026 ShopIndia. Made with ❤️ by Tarun Gohil</p>
+      <p className="text-center text-white/20 text-xs mt-8">© 2026 ShopIndia. Version 1.2</p>
     </footer>
   );
 };

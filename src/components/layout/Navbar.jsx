@@ -1,41 +1,36 @@
-import { useState, useEffect } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import GlassCard from "../ui/GlassCard"; 
 import { logoutUser } from "../../services/auth/authService";
 
 
 import { useSelector, useDispatch } from "react-redux";
-import { auth } from "../../services/firebase"; 
-import { onAuthStateChanged } from "firebase/auth";
-import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice"; 
+import { logoutUserRedux } from "../../store/slices/authSlice"; 
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch(); 
 
   const user = useSelector((state) => state.auth.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isAdminUser = user?.role === "admin";
+  const showBackButton = location.pathname !== "/";
 
-  
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        
-        dispatch(loginUserRedux({
-          uid: currentUser.uid,
-          email: currentUser.email,
-        }));
-      } else {
-        dispatch(logoutUserRedux());
-      }
-    });
-
-    return () => unsubscribe();
-  }, [dispatch]);
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/");
+    }
+  };
 
   const handleLogout = async () => {
-    await logoutUser();
-    setIsMenuOpen(false); 
+    const result = await logoutUser();
+    if (result.success) {
+      dispatch(logoutUserRedux());
+    }
+    setIsMenuOpen(false);
     navigate("/login");
   };
 
@@ -51,6 +46,12 @@ const Navbar = () => {
           </h1>
           
           <div className="hidden md:flex gap-6 text-lg items-center">
+            {showBackButton && (
+              <button onClick={goBack} className="text-white hover:text-yellow-300 transition text-sm font-semibold py-2 px-3 rounded-full bg-white/5 border border-white/10">
+                ← Back
+              </button>
+            )}
+
             <NavLink to="/"
               className={({isActive}) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"} 
             >Home</NavLink>
@@ -70,6 +71,15 @@ const Navbar = () => {
                 >
                   Profile 👤
                 </NavLink>
+
+                {isAdminUser && (
+                  <NavLink
+                    to="/admin"
+                    className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                  >
+                    Admin
+                  </NavLink>
+                )}
 
                 <button 
                   onClick={handleLogout}
@@ -114,8 +124,14 @@ const Navbar = () => {
             
             {user ? (
               <>
+                <button onClick={goBack} className="text-white hover:text-yellow-300 transition text-left font-semibold py-2 px-3 rounded-full bg-white/5 border border-white/10">
+                  ← Back
+                </button>
                 <NavLink to="/cart" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Cart 🛒</NavLink>
                 <NavLink to="/profile" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Profile 👤</NavLink>
+                {isAdminUser && (
+                  <NavLink to="/admin" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Admin Dashboard</NavLink>
+                )}
                 <button 
                   onClick={handleLogout}
                   className="bg-red-500/80 text-white px-4 py-2 rounded-xl text-center font-semibold mt-2"

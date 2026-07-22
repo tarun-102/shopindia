@@ -46,8 +46,8 @@ const Signup = () => {
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
       <GlassCard className="p-10 w-full max-w-md border-white/10 shadow-2xl">
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-black text-white mb-2">Join ShopIndia!</h2>
-          <p className="text-white/50">Create your account to start shopping</p>
+          <h2 className="text-4xl font-black text-white mb-2">Create Your Account</h2>
+          <p className="text-white/50">Register now to access exclusive offers and fast checkout.</p>
         </div>
       {error && <ErrorBox message={error} /> }
 

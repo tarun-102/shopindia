@@ -62,7 +62,7 @@ const Login = () => {
                 type="email"
                 name="email"
                 onChange={handleChange}
-                placeholder="tarun@example.com"
+                placeholder="e.g. tarun@example.com"
                 className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
                 required
               />
@@ -85,7 +85,7 @@ const Login = () => {
             <button 
               type="submit"
               className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-yellow-500/20 uppercase tracking-widest">
-              Login Now 🚀
+              Sign In
             </button>
           </form>
         )}

@@ -202,25 +202,35 @@ const Admin = () => {
       {activeTab === "orders" && (
         <div className="space-y-6 animate-fade-in">
           {ordersList.length === 0 ? (
-            <p className="text-center text-gray-400 py-10">Koi order nahi aaya abhi tak! 😢</p>
+            <p className="text-center text-gray-400 py-10">No orders have been placed yet.</p>
           ) : (
-            ordersList.map((order) => (
-              <div key={order.id} className="bg-black/40 border border-gray-600 p-6 rounded-xl flex flex-col md:flex-row justify-between gap-6 hover:border-yellow-400/50 transition">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono">{order.id}</span></p>
-                  <p className="text-sm text-gray-400">User ID: <span className="text-blue-400">{order.userId}</span></p>
-                  <p className="text-sm text-gray-400">Date: <span className="text-white">{new Date(order.date).toLocaleString('en-IN')}</span></p>
-                  <div className="mt-3">
-                    <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === "Cancelled 🔴" ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
-                      {order.status}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">{item.quantity}x {item.title.substring(0, 15)}...</div>
-                    ))}
-                  </div>
+            <>
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">All Orders</h3>
+                  <p className="text-white/60">Total orders: {ordersList.length}</p>
                 </div>
+                <div className="rounded-3xl bg-yellow-400/10 border border-yellow-400/20 px-6 py-3 text-yellow-300 font-semibold shadow-lg shadow-yellow-400/10">
+                  Latest orders appear first
+                </div>
+              </div>
+              {ordersList.map((order) => (
+                <div key={order.id} className="bg-black/40 border border-gray-600 p-6 rounded-xl flex flex-col md:flex-row justify-between gap-6 hover:border-yellow-400/50 transition">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono">{order.id}</span></p>
+                    <p className="text-sm text-gray-400">User ID: <span className="text-blue-400">{order.userId}</span></p>
+                    <p className="text-sm text-gray-400">Date: <span className="text-white">{new Date(order.date).toLocaleString('en-IN')}</span></p>
+                    <div className="mt-3">
+                      <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === "Cancelled 🔴" ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                        {order.status}
+                      </p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {order.items?.map((item, idx) => (
+                        <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">{item.quantity}x {item.title.substring(0, 15)}...</div>
+                      ))}
+                    </div>
+                  </div>
                 <div className="flex flex-col items-start md:items-end justify-between">
                   <p className="text-2xl font-black text-yellow-400">₹ {formatPrice(order.totalAmount)}</p>
                   <div className="flex gap-2 mt-4">
