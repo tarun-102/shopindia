@@ -4,8 +4,8 @@ import {
   addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB,
   getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB 
 } from "../services/productservices";
+import { getAllUsers } from "../services/auth/authService"; 
 import { formatPrice } from "../utils/priceFormatter";
-
 
 export const categoriesList = [
   { id: 1, name: "Smartphones & Accessories", value: "smartphones", icon: "📱" },
@@ -36,120 +36,106 @@ export const categoriesList = [
 ];
 
 const Admin = () => {
-  const [activeTab, setActiveTab] = useState("products"); 
+  // ---------------------------------------------------------------------------
+  // Component States
+  // ---------------------------------------------------------------------------
+  const [activeTab, setActiveTab] = useState("analytics"); 
 
-  const [product, setProduct] = useState({ title: "", price: "", category: "", thumbnail: "", description: "", });
+  const [product, setProduct] = useState({ title: "", price: "", category: "", thumbnail: "", description: "" });
   const [productsList, setProductsList] = useState([]);
-  const [productsError, setProductsError] = useState("");
-  const [editingId, setEditingId] = useState(null);
   const [ordersList, setOrdersList] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(true);
-  const [ordersError, setOrdersError] = useState("");
-  const [productsPage, setProductsPage] = useState(1);
-  const [ordersPage, setOrdersPage] = useState(1);
+  const [usersList, setUsersList] = useState([]); 
+  const [editingId, setEditingId] = useState(null);
+  
   const [loading, setLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  
   const user = useSelector((state) => state.auth.user);
   const userRole = useSelector((state) => state.auth.role);
 
   const [alertData, setAlertData] = useState({ show: false, message: "", icon: "" });
   const [confirmDialog, setConfirmDialog] = useState({ show: false, id: null, actionType: "", message: "" });
 
-  const activeDeliveryOrders = ordersList.filter((order) => order.status === "Order Confirmed 🟢" || order.status === "Out for Delivery 🚚");
-  const deliveredOrders = ordersList.filter((order) => order.status === "Delivered ✅");
-
-  const productsPerPage = 6;
+  // Pagination States
+  const [productsPage, setProductsPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1); 
+  
+  const productsPerPage = 5; 
   const ordersPerPage = 5;
+  const usersPerPage = 5; 
+
+  // ---------------------------------------------------------------------------
+  // Real Analytics Calculations (Synced with Firestore Orders List)
+  // ---------------------------------------------------------------------------
+  const totalOrdersCount = ordersList.length;
+  const deliveredOrders = ordersList.filter((o) => o.status === "Delivered ✅");
+  const activeDeliveryOrders = ordersList.filter((o) => o.status === "Order Confirmed 🟢" || o.status === "Out for Delivery 🚚" || o.status === "Pending ⏳");
+  
+  const totalRevenue = deliveredOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+  const pendingRevenue = activeDeliveryOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+
   const totalProductPages = Math.max(1, Math.ceil(productsList.length / productsPerPage));
   const totalOrderPages = Math.max(1, Math.ceil(ordersList.length / ordersPerPage));
+  const totalUserPages = Math.max(1, Math.ceil(usersList.length / usersPerPage)); 
+
   const paginatedProducts = productsList.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
   const paginatedOrders = ordersList.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
+  const paginatedUsers = usersList.slice((usersPage - 1) * usersPerPage, usersPage * usersPerPage); 
 
-  const getOrderAge = (date) => {
-    try {
-      const diff = Date.now() - new Date(date).getTime();
-      return Math.max(Math.floor(diff / 60000), 0);
-    } catch {
-      return 0;
-    }
-  };
-
-  const updateOrderStatus = async (orderId, status, message, icon) => {
-    if (await updateOrderStatusInDB(orderId, status)) {
-      showCustomAlert(message, icon);
-      fetchOrders();
-    }
-  };
-
+  // ---------------------------------------------------------------------------
+  // Helper Functions
+  // ---------------------------------------------------------------------------
   const showCustomAlert = (message, icon) => {
     setAlertData({ show: true, message, icon });
-    setTimeout(() => setAlertData({ show: false, message: "", icon: "" }), 5000); 
+    setTimeout(() => setAlertData({ show: false, message: "", icon: "" }), 4000); 
   };
 
+  // ---------------------------------------------------------------------------
+  // Data Fetching Effects
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
     if (userRole === "admin") {
+      fetchProducts();
       fetchOrders();
-    } else {
-      setOrdersLoading(false);
-      setOrdersError("Access denied: Admin role required to view orders.");
+      fetchUsers();
     }
-  }, [user, userRole]);
-
-  useEffect(() => {
-    if (activeTab === "orders" && userRole === "admin") {
-      fetchOrders();
-    }
-  }, [activeTab, userRole]);
+  }, [userRole]);
 
   const fetchProducts = async () => {
-    setProductsError("");
     try {
       const products = await getAllProducts();
       setProductsList(products);
-      setProductsPage(1);
-      if (products.length === 0) {
-        setProductsError("No products found. Please add products or check the database collection.");
-      }
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
-      setProductsError(error?.message || "Unable to load products at this time.");
-      setProductsList([]);
+    } catch (error) { 
+      console.error("Error fetching products:", error); 
     }
   };
 
   const fetchOrders = async () => {
     setOrdersLoading(true);
-    setOrdersError("");
     try {
-      console.log("Admin fetching orders from Firestore...");
       const orders = await getAllOrders(user?.uid);
-      console.log("Fetched orders:", orders);
       setOrdersList(orders);
-      setOrdersPage(1);
-    } catch (error) {
-      console.error("Failed to fetch orders:", error);
-      const permError = error?.message?.toLowerCase().includes("permission-denied");
-      setOrdersError(
-        permError
-          ? "Firebase permission denied. Please check admin access and Firestore rules for the orders collection."
-          : error?.message || error?.code || "Unable to load orders at this time."
-      );
-      setOrdersList([]);
-    } finally {
-      setOrdersLoading(false);
+    } catch (error) { 
+      console.error("Error fetching orders:", error); 
+    } finally { 
+      setOrdersLoading(false); 
     }
   };
 
-  const handleChange = (e) => setProduct({ ...product, [e.target.name]: e.target.value });
+  const fetchUsers = async () => {
+    try {
+      const users = await getAllUsers();
+      setUsersList(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
 
-  const handleSubmit = async (e) => {
+  // ---------------------------------------------------------------------------
+  // Action Handlers
+  // ---------------------------------------------------------------------------
+  const handleProductSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);  
     const productData = { ...product, price: Number(product.price) };
@@ -160,9 +146,10 @@ const Admin = () => {
         setEditingId(null); 
       }
     } else {
-      if (await addProductToDB(productData)) showCustomAlert("New Product Added Successfully!", "🔥");
+      if (await addProductToDB(productData)) {
+        showCustomAlert("Product Added Successfully!", "🔥");
+      }
     }
-    
     setProduct({ title: "", price: "", category: "", thumbnail: "", description: "" });
     fetchProducts();
     setLoading(false);
@@ -174,248 +161,361 @@ const Admin = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const triggerCancelOrder = (id) => setConfirmDialog({ show: true, id, actionType: "CANCEL_ORDER", message: "Are you sure you want to CANCEL this order?" });
-  const triggerDeleteOrder = (id) => setConfirmDialog({ show: true, id, actionType: "DELETE_ORDER", message: "Delete this order record permanently? This cannot be undone!" });
-  const triggerDeleteProduct = (id) => setConfirmDialog({ show: true, id, actionType: "DELETE_PRODUCT", message: "Are you sure you want to delete this Product? 🚀" });
+  const updateOrderStatus = async (orderId, status, message, icon) => {
+    if (await updateOrderStatusInDB(orderId, status)) {
+      showCustomAlert(message, icon);
+      fetchOrders();
+    }
+  };
 
   const executeConfirmAction = async () => {
     const { id, actionType } = confirmDialog;
     setConfirmDialog({ show: false, id: null, actionType: "", message: "" });
 
     if (actionType === "CANCEL_ORDER") {
-      const result = await cancelOrderInDB(id, { isAdmin: true });
-      if (result.success) {
-        showCustomAlert("Order Cancelled by Admin!", "🚫");
-        fetchOrders(); 
-      } else {
-        showCustomAlert(result.error || "Order cancellation failed.", "⚠️");
-      }
+      await cancelOrderInDB(id, { isAdmin: true });
+      fetchOrders(); 
+      showCustomAlert("Order Cancelled by Admin", "🚫");
     } else if (actionType === "DELETE_ORDER") {
-      if (await deleteOrderFromDB(id)) {
-        showCustomAlert("Order Record Deleted!", "🗑️");
-        fetchOrders();
-      }
+      await deleteOrderFromDB(id);
+      fetchOrders(); 
+      showCustomAlert("Order Record Deleted", "🗑️");
     } else if (actionType === "DELETE_PRODUCT") {
       await deleteProductFromDB(id);
-      fetchProducts();
-      showCustomAlert("Product Deleted Successfully!", "🗑️");
+      fetchProducts(); 
+      showCustomAlert("Product Deleted", "🗑️");
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto mt-10 p-4 md:p-6 bg-white/10 backdrop-blur-md rounded-2xl shadow-xl text-white relative">
+    <div className="max-w-7xl mx-auto mt-8 p-4 md:p-8 bg-[#0a0f16]/85 backdrop-blur-3xl rounded-[2.5rem] border border-white/5 shadow-2xl text-white relative min-h-[85vh]">
       
-      {/* CUSTOM GLASS ALERT */}
+      {/* Toast Notification */}
       {alertData.show && (
-        <div className="fixed top-24 right-5 md:right-10 z-[100] animate-bounce">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl px-6 py-4 rounded-2xl flex items-center gap-3 text-white">
+        <div className="fixed top-24 right-5 z-[100] animate-bounce">
+          <div className="bg-[#111827] backdrop-blur-xl border border-emerald-500/40 shadow-emerald-500/20 px-6 py-4 rounded-2xl flex items-center gap-3">
             <span className="text-2xl">{alertData.icon}</span>
-            <p className="font-bold tracking-wide">{alertData.message}</p>
+            <p className="font-semibold text-emerald-300">{alertData.message}</p>
           </div>
         </div>
       )}
 
-      {/* CUSTOM CONFIRMATION POPUP */}
+      {/* Confirmation Modal */}
       {confirmDialog.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-gray-900/90 border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)] p-8 rounded-3xl max-w-md w-full text-center scale-up">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-[#111827] border border-white/10 shadow-2xl p-8 rounded-3xl max-w-md w-full text-center">
             <div className="text-5xl mb-4">⚠️</div>
             <h3 className="text-2xl font-black text-white mb-2">Are you sure?</h3>
-            <p className="text-gray-400 mb-8 leading-relaxed">{confirmDialog.message}</p>
+            <p className="text-gray-400 mb-8 leading-relaxed text-sm">{confirmDialog.message}</p>
             <div className="flex gap-4 justify-center">
-              <button onClick={() => setConfirmDialog({ show: false, id: null, actionType: "", message: "" })} className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition">No, Go Back</button>
-              <button onClick={executeConfirmAction} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-500/30 transition">Yes, Do it!</button>
+              <button onClick={() => setConfirmDialog({ show: false, id: null, actionType: "", message: "" })} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3 rounded-xl transition">No, Cancel</button>
+              <button onClick={executeConfirmAction} className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-500/30 transition">Yes, Proceed</button>
             </div>
           </div>
         </div>
       )}
 
-      <h2 className="text-4xl font-black mb-8 text-center text-yellow-400 uppercase tracking-widest">Admin Dashboard 👑</h2>
-
-      {/* TABS BUTTONS */}
-      <div className="flex justify-center gap-4 mb-10 border-b border-white/10 pb-4">
-        <button onClick={() => setActiveTab("products")} className={`px-8 py-3 rounded-xl font-bold transition-all ${activeTab === "products" ? "bg-yellow-400 text-black scale-105" : "bg-white/10 text-white hover:bg-white/20"}`}>📦 Manage Products</button>
-        <button onClick={() => setActiveTab("orders")} className={`px-8 py-3 rounded-xl font-bold transition-all ${activeTab === "orders" ? "bg-yellow-400 text-black scale-105" : "bg-white/10 text-white hover:bg-white/20"}`}>🛒 Manage Orders</button>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+        <div>
+          <h2 className="text-3xl md:text-4xl font-black uppercase tracking-widest bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
+            Control Center 🎛️
+          </h2>
+          <p className="text-gray-400 text-sm mt-1">Real-time e-commerce metrics and management console.</p>
+        </div>
+        <div className="bg-white/5 border border-white/10 px-5 py-2.5 rounded-full flex items-center gap-3">
+          <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400">👤</div>
+          <span className="font-semibold text-sm">{user?.email || "Admin"}</span>
+        </div>
       </div>
 
-      {/* TAB 1: PRODUCTS */}
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-3 mb-10 border-b border-white/10 pb-6">
+        {[
+          { id: "analytics", label: "📊 Analytics Dashboard" },
+          { id: "products", label: "📦 Manage Products" },
+          { id: "orders", label: "🛒 Manage Orders" },
+          { id: "users", label: "👥 Users & Staff" }
+        ].map((tab) => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)} 
+            className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${
+              activeTab === tab.id 
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20 scale-105 border-transparent" 
+              : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 border border-white/5"
+            }`}>
+              {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ===================================================================
+          TAB 1: ANALYTICS (REAL DATABASE METRICS)
+      =================================================================== */}
+      {activeTab === "analytics" && (
+        <div className="animate-fade-in space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            {/* Total Revenue */}
+            <div className="bg-gradient-to-br from-[#111827] to-[#1f2937] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">💰</div>
+              <p className="text-gray-400 font-bold text-sm tracking-wider uppercase">Total Revenue</p>
+              <h3 className="text-3xl md:text-4xl font-black text-emerald-400 mt-2">₹{formatPrice(totalRevenue)}</h3>
+              <p className="text-xs text-emerald-500/80 mt-2">From Delivered Orders</p>
+            </div>
+            
+            {/* Pending / Active Revenue */}
+            <div className="bg-gradient-to-br from-[#111827] to-[#1f2937] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-amber-500/30 transition-all">
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">⏳</div>
+              <p className="text-gray-400 font-bold text-sm tracking-wider uppercase">Active Value</p>
+              <h3 className="text-3xl md:text-4xl font-black text-amber-400 mt-2">₹{formatPrice(pendingRevenue)}</h3>
+              <p className="text-xs text-amber-500/80 mt-2">In Transit / Processing</p>
+            </div>
+
+            {/* Total Orders Count */}
+            <div className="bg-gradient-to-br from-[#111827] to-[#1f2937] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-blue-500/30 transition-all">
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">📦</div>
+              <p className="text-gray-400 font-bold text-sm tracking-wider uppercase">Total Orders</p>
+              <h3 className="text-3xl md:text-4xl font-black text-blue-400 mt-2">{totalOrdersCount}</h3>
+              <p className="text-xs text-blue-500/80 mt-2">{deliveredOrders.length} Completed</p>
+            </div>
+
+            {/* Registered Users Count */}
+            <div className="bg-gradient-to-br from-[#111827] to-[#1f2937] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">👥</div>
+              <p className="text-gray-400 font-bold text-sm tracking-wider uppercase">Total Users</p>
+              <h3 className="text-3xl md:text-4xl font-black text-indigo-400 mt-2">{usersList.length}</h3>
+              <p className="text-xs text-indigo-500/80 mt-2">Registered Accounts</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================
+          TAB 2: PRODUCTS MANAGEMENT
+      =================================================================== */}
       {activeTab === "products" && (
         <div className="animate-fade-in">
-          <form onSubmit={handleSubmit} className={`flex flex-col gap-4 mb-10 p-6 rounded-lg border ${editingId ? 'bg-blue-900/40 border-blue-500' : 'bg-black/40 border-gray-600'}`}>
-            <h3 className={`text-xl font-bold ${editingId ? 'text-blue-400' : 'text-green-400'}`}>
+           <form onSubmit={handleProductSubmit} className={`flex flex-col gap-5 mb-10 p-6 md:p-8 rounded-3xl border backdrop-blur-sm ${editingId ? 'bg-indigo-900/10 border-indigo-500/30' : 'bg-white/5 border-white/10'}`}>
+            <h3 className={`text-xl font-bold ${editingId ? 'text-indigo-400' : 'text-emerald-400'}`}>
               {editingId ? "Update Product 🛠️" : "Add New Product ➕"}
-              {editingId && <button type="button" onClick={() => {setEditingId(null); setProduct({ title: "", price: "", category: "", thumbnail: "", description: "" });}} className="ml-4 text-sm text-red-400 underline">Cancel Edit</button>}
+              {editingId && <button type="button" onClick={() => {setEditingId(null); setProduct({ title: "", price: "", category: "", thumbnail: "", description: "" });}} className="ml-4 text-sm text-rose-400 hover:text-rose-300 underline">Cancel Edit</button>}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" name="title" value={product.title} onChange={handleChange} required placeholder="Product Title" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
-              <input type="number" name="price" value={product.price} onChange={handleChange} required placeholder="Price (₹)" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <input type="text" name="title" value={product.title} onChange={(e) => setProduct({...product, title: e.target.value})} required placeholder="Product Title" className="px-4 py-3 rounded-xl bg-black/40 border border-gray-700 focus:border-emerald-500 focus:outline-none text-white transition-colors" />
+              <input type="number" name="price" value={product.price} onChange={(e) => setProduct({...product, price: e.target.value})} required placeholder="Price (₹)" className="px-4 py-3 rounded-xl bg-black/40 border border-gray-700 focus:border-emerald-500 focus:outline-none text-white transition-colors" />
               
-              {/* 🔥 POORI 25 CATEGORIES AUTOMATICALLY LOADED HERE */}
-              <select name="category" value={product.category} onChange={handleChange} required className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none text-white">
-                <option value="" disabled className="text-gray-800">Select Category 🔽</option>
-                {categoriesList.map((cat) => (
-                  <option key={cat.id} value={cat.value} className="text-gray-800">
-                    {cat.icon} {cat.name}
-                  </option>
-                ))}
+              <select name="category" value={product.category} onChange={(e) => setProduct({...product, category: e.target.value})} required className="px-4 py-3 rounded-xl bg-black/40 border border-gray-700 focus:border-emerald-500 focus:outline-none text-white transition-colors">
+                <option value="" disabled className="text-gray-500">Select Category 🔽</option>
+                {categoriesList.map((cat) => <option key={cat.id} value={cat.value} className="bg-gray-900">{cat.icon} {cat.name}</option>)}
               </select>
-
-              <input type="text" name="thumbnail" value={product.thumbnail} onChange={handleChange} required placeholder="Image URL (Transparent PNG)" className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none" />
-              <textarea name="description" value={product.description} onChange={handleChange} required rows="2" placeholder="Description..." className="px-4 py-2 rounded-lg bg-black/30 border border-gray-600 focus:border-yellow-400 focus:outline-none md:col-span-2"></textarea>
+              
+              <input type="text" name="thumbnail" value={product.thumbnail} onChange={(e) => setProduct({...product, thumbnail: e.target.value})} required placeholder="Image URL (Transparent PNG)" className="px-4 py-3 rounded-xl bg-black/40 border border-gray-700 focus:border-emerald-500 focus:outline-none text-white transition-colors" />
+              <textarea name="description" value={product.description} onChange={(e) => setProduct({...product, description: e.target.value})} required rows="2" placeholder="Product Description..." className="px-4 py-3 rounded-xl bg-black/40 border border-gray-700 focus:border-emerald-500 focus:outline-none md:col-span-2 text-white transition-colors"></textarea>
             </div>
-            <button type="submit" disabled={loading} className={`mt-4 text-black font-bold py-3 rounded-lg transition ${editingId ? 'bg-blue-400 hover:bg-blue-500' : 'bg-yellow-400 hover:bg-yellow-500'}`}>
+            <button type="submit" className={`mt-2 font-bold py-3.5 rounded-xl text-white shadow-lg transition-all ${editingId ? 'bg-indigo-500 hover:bg-indigo-400 shadow-indigo-500/20' : 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/20'}`}>
               {loading ? "Processing... ⏳" : (editingId ? "Update Product 🚀" : "Add Product 🚀")}
             </button>
           </form>
 
-          {/* PRODUCT LIST UI SAME REHEGA */}
-          <div className="bg-black/40 rounded-lg border border-gray-600 overflow-hidden">
-            {productsError ? (
-              <div className="p-10 text-center text-red-300">
-                <p className="font-bold">{productsError}</p>
-              </div>
-            ) : productsList.length === 0 ? (
-              <div className="p-10 text-center text-gray-400">
-                <p className="font-bold">No products available.</p>
-                <p className="mt-2">Add a product above to see it appear here.</p>
-              </div>
+          <div className="space-y-4">
+            {productsList.length === 0 ? (
+               <div className="p-10 text-center text-gray-400 bg-white/5 rounded-3xl border border-white/5">
+                 <span className="text-4xl mb-4 block">📦</span>
+                 <p className="font-bold">No products available.</p>
+               </div>
             ) : (
-              <>
-                {paginatedProducts.map((item) => (
-                  <div key={item.id} className="p-4 flex justify-between items-center hover:bg-white/5 border-b border-gray-700">
-                    <div className="flex gap-4 items-center">
-                      <img src={item.thumbnail} alt="" className="w-12 h-12 object-contain bg-white/5 rounded" />
-                      <div>
-                        <h4 className="font-bold">{item.title}</h4>
-                        <p className="text-yellow-400">₹{item.price}</p>
-                      </div>
+              paginatedProducts.map((item) => (
+                <div key={item.id} className="bg-black/20 border border-white/5 p-5 rounded-3xl flex flex-col md:flex-row justify-between gap-6 hover:border-emerald-500/30 transition-all duration-300 shadow-lg group backdrop-blur-md">
+                  <div className="flex gap-5 items-start md:items-center flex-1">
+                    <div className="w-24 h-24 shrink-0 bg-white rounded-2xl p-2 border border-gray-700 flex items-center justify-center relative overflow-hidden shadow-inner">
+                      <img src={item.thumbnail} alt={item.title} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500 ease-out" />
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleEdit(item)} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1.5 rounded font-bold">Edit</button>
-                      <button onClick={() => triggerDeleteProduct(item.id)} className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded font-bold">Delete</button>
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h4 className="font-bold text-lg text-gray-100 group-hover:text-emerald-400 transition-colors">{item.title}</h4>
+                        <span className="text-[10px] uppercase tracking-widest bg-white/10 text-gray-300 px-2.5 py-1 rounded-md border border-white/10">
+                          {categoriesList.find(c => c.value === item.category)?.name || item.category}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400 line-clamp-2 leading-relaxed max-w-3xl">{item.description}</p>
+                      <p className="text-emerald-400 font-black text-xl mt-1">₹{formatPrice(item.price)}</p>
                     </div>
                   </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-b-3xl border-t border-white/10">
-                  <span className="text-sm text-gray-400">Page {productsPage} of {totalProductPages}</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setProductsPage((page) => Math.max(page - 1, 1))}
-                      disabled={productsPage === 1}
-                      className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Prev</button>
-                    <button
-                      onClick={() => setProductsPage((page) => Math.min(page + 1, totalProductPages))}
-                      disabled={productsPage === totalProductPages}
-                      className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                    >Next</button>
+                  <div className="flex md:flex-col gap-2 shrink-0 justify-center">
+                    <button onClick={() => handleEdit(item)} className="flex-1 bg-indigo-500/10 hover:bg-indigo-500 border border-indigo-500/30 text-indigo-400 hover:text-white px-5 py-2 rounded-xl font-bold text-sm transition">Edit</button>
+                    <button onClick={() => setConfirmDialog({show: true, id: item.id, actionType: "DELETE_PRODUCT", message: "Delete Product?"})} className="flex-1 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/30 text-rose-400 hover:text-white px-5 py-2 rounded-xl font-bold text-sm transition">Delete</button>
                   </div>
                 </div>
-              </>
+              ))
+            )}
+            
+            {productsList.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 bg-white/5 rounded-2xl border border-white/10 mt-6">
+                <span className="text-sm text-gray-400 font-medium">Page {productsPage} of {totalProductPages}</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setProductsPage(p => Math.max(p - 1, 1))} disabled={productsPage === 1} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Prev</button>
+                  <button onClick={() => setProductsPage(p => Math.min(p + 1, totalProductPages))} disabled={productsPage === totalProductPages} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Next</button>
+                </div>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ORDERS TAB UI SAME REHEGA */}
+      {/* ===================================================================
+          TAB 3: ORDERS MANAGEMENT
+      =================================================================== */}
       {activeTab === "orders" && (
         <div className="space-y-6 animate-fade-in">
           {ordersLoading ? (
-            <p className="text-center text-gray-400 py-10">Loading orders...</p>
-          ) : ordersError ? (
-            <div className="text-center text-red-400 py-10">
-              <p>{ordersError}</p>
-              {user && (
-                <p className="mt-4 text-sm text-yellow-200">
-                  Logged in as: {user.email} <span className="block">Role: {userRole || "unknown"}</span>
-                  {userRole === "admin" && " — Firebase rules must allow admin access to orders."}
-                </p>
-              )}
-              <button onClick={fetchOrders} className="mt-4 bg-yellow-400 text-black px-5 py-2 rounded-lg font-semibold">Retry</button>
-            </div>
+             <div className="flex justify-center py-20">
+               <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500/20 border-t-emerald-400"></div>
+             </div>
           ) : ordersList.length === 0 ? (
-            <div className="text-center text-gray-400 py-10">
-              <p>No orders have been placed yet.</p>
-              <button onClick={fetchOrders} className="mt-4 bg-yellow-400 text-black px-5 py-2 rounded-lg font-semibold">Refresh</button>
-            </div>
+             <div className="p-10 text-center text-gray-400 bg-white/5 rounded-3xl border border-white/5">
+                <p className="font-bold">No orders placed yet.</p>
+             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-4 mb-6">
-                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
-                  <p className="text-sm uppercase tracking-widest text-white/60">Total Orders</p>
-                  <p className="text-4xl font-black mt-3">{ordersList.length}</p>
-                </div>
-                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
-                  <p className="text-sm uppercase tracking-widest text-white/60">In Delivery</p>
-                  <p className="text-4xl font-black mt-3">{activeDeliveryOrders.length}</p>
-                </div>
-                <div className="rounded-3xl bg-white/5 border border-white/10 p-6 text-white">
-                  <p className="text-sm uppercase tracking-widest text-white/60">Delivered</p>
-                  <p className="text-4xl font-black mt-3">{deliveredOrders.length}</p>
-                </div>
-                <button onClick={fetchOrders} className="rounded-3xl border border-white/10 bg-yellow-400 text-black font-bold px-6 py-6 hover:bg-yellow-300 transition">Refresh Orders</button>
-              </div>
               {paginatedOrders.map((order) => (
-                <div key={order.id} className="bg-black/40 border border-gray-600 p-6 rounded-xl flex flex-col md:flex-row justify-between gap-6 hover:border-yellow-400/50 transition">
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono">{order.id}</span></p>
-                    <p className="text-sm text-gray-400">User ID: <span className="text-blue-400">{order.userId}</span></p>
-                    <p className="text-sm text-gray-400">Date: <span className="text-white">{new Date(order.date).toLocaleString('en-IN')}</span></p>
-                    <div className="mt-3">
-                      <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === "Cancelled 🔴" ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
-                        {order.status}
-                      </p>
+                <div key={order.id} className="bg-black/30 border border-white/10 p-6 md:p-7 rounded-3xl flex flex-col md:flex-row justify-between gap-8 hover:border-emerald-500/40 transition-colors shadow-lg relative overflow-hidden">
+                  <div className="flex-1 space-y-5">
+                    <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+                      <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex justify-center items-center font-black text-xl">
+                        {(order.shipping?.name || "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-lg">{order.shipping?.name || "Unknown Customer"}</p>
+                        <p className="text-sm text-emerald-400/80">{order.userEmail || order.shipping?.email || `User ID: ${order.userId}`}</p>
+                      </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {order.items?.map((item, idx) => (
-                        <div key={idx} className="bg-white/10 px-3 py-1 rounded text-xs">{item.quantity}× {item.title.substring(0, 15)}...</div>
-                      ))}
+
+                    <p className="text-sm text-gray-400">Order ID: <span className="text-white font-mono bg-black/40 px-2 py-1 rounded">{order.id}</span></p>
+
+                    <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
+                      <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex justify-center items-center text-lg">🛵</div>
+                      <div>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Delivery Partner ID</p>
+                        <p className="text-sm font-semibold text-indigo-300 mt-0.5">{order.assignedTo || "Not Assigned / Pending"}</p>
+                      </div>
                     </div>
-                    <div className="mt-4 rounded-3xl bg-white/5 border border-white/10 p-4 text-sm text-gray-200 space-y-2">
-                      <p className="font-semibold text-white">Shipping Details</p>
-                      <p>{order.shipping?.name || "-"}</p>
-                      <p>{order.shipping?.address || "-"}</p>
-                      <p>PIN: {order.shipping?.pincode || "-"}</p>
-                      <p className="text-white/60">Placed {getOrderAge(order.date)} min ago</p>
+                    
+                    <div>
+                      <span className={`inline-flex px-4 py-1.5 rounded-full text-xs font-black uppercase border ${
+                        order.status === "Cancelled 🔴" ? "bg-rose-500/10 text-rose-400 border-rose-500/30" : 
+                        order.status === "Delivered ✅" ? "bg-teal-500/10 text-teal-400 border-teal-500/30" :
+                        "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      }`}>{order.status}</span>
                     </div>
                   </div>
-                <div className="flex flex-col items-start md:items-end justify-between gap-4">
-                  <div className="space-y-2 text-right">
-                    <p className="text-2xl font-black text-yellow-400">₹ {formatPrice(order.totalAmount)}</p>
-                    <p className="text-sm text-gray-400">Items: {order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)}</p>
-                  </div>
-                  <div className="flex flex-col gap-2 w-full md:w-auto">
-                    {order.status === "Order Confirmed 🟢" && (
-                      <button onClick={() => updateOrderStatus(order.id, "Out for Delivery 🚚", "Order sent to delivery!", "🚚")} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Send to Delivery</button>
-                    )}
-                    {order.status === "Out for Delivery 🚚" && (
-                      <button onClick={() => updateOrderStatus(order.id, "Delivered ✅", "Order delivered successfully!", "✅")} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Mark Delivered</button>
-                    )}
-                    {order.status !== "Cancelled 🔴" && (
-                      <button onClick={() => triggerCancelOrder(order.id)} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Cancel Order</button>
-                    )}
-                    <button onClick={() => triggerDeleteOrder(order.id)} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Delete</button>
+
+                  <div className="flex flex-col items-start md:items-end justify-between gap-6 bg-white/5 p-6 rounded-2xl border border-white/5 w-full md:w-72">
+                    <div className="text-right w-full">
+                      <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Total Amount</p>
+                      <p className="text-3xl font-black text-emerald-400 mt-1">₹{formatPrice(order.totalAmount)}</p>
+                    </div>
+                    <div className="flex flex-col gap-3 w-full">
+                      {order.status === "Order Confirmed 🟢" && (
+                        <button onClick={() => updateOrderStatus(order.id, "Out for Delivery 🚚", "Sent to delivery!", "🚚")} className="w-full bg-indigo-500/20 hover:bg-indigo-500 border border-indigo-500/50 text-indigo-300 hover:text-white px-4 py-3 rounded-xl font-bold transition">Send to Delivery</button>
+                      )}
+                      {order.status === "Out for Delivery 🚚" && (
+                         <button onClick={() => updateOrderStatus(order.id, "Delivered ✅", "Order delivered!", "✅")} className="w-full bg-teal-500/20 hover:bg-teal-500 border border-teal-500/50 text-teal-300 hover:text-white px-4 py-3 rounded-xl font-bold transition">Mark Delivered</button>
+                      )}
+                      {order.status !== "Cancelled 🔴" && (
+                        <button onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "CANCEL_ORDER", message: "Cancel this order?"})} className="w-full bg-orange-500/10 hover:bg-orange-500 border border-orange-500/30 text-orange-400 hover:text-white px-4 py-3 rounded-xl font-bold transition">Cancel Order</button>
+                      )}
+                      <button onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "DELETE_ORDER", message: "Delete this record forever?"})} className="w-full bg-rose-500 hover:bg-rose-600 shadow-lg shadow-rose-500/20 text-white px-4 py-3 rounded-xl font-bold transition mt-1">Delete Order 🗑️</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-b-3xl border-t border-white/10">
-                <span className="text-sm text-gray-400">Page {ordersPage} of {totalOrderPages}</span>
+              ))}
+              <div className="flex items-center justify-between px-6 py-4 bg-white/5 rounded-2xl border border-white/10 mt-6">
+                <span className="text-sm text-gray-400 font-medium">Page {ordersPage} of {totalOrderPages}</span>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setOrdersPage((page) => Math.max(page - 1, 1))}
-                    disabled={ordersPage === 1}
-                    className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                  >Prev</button>
-                  <button
-                    onClick={() => setOrdersPage((page) => Math.min(page + 1, totalOrderPages))}
-                    disabled={ordersPage === totalOrderPages}
-                    className="px-4 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                  >Next</button>
+                  <button onClick={() => setOrdersPage(p => Math.max(p - 1, 1))} disabled={ordersPage === 1} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Prev</button>
+                  <button onClick={() => setOrdersPage(p => Math.min(p + 1, totalOrderPages))} disabled={ordersPage === totalOrderPages} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Next</button>
                 </div>
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ===================================================================
+          TAB 4: USERS & STAFF DIRECTORY
+      =================================================================== */}
+      {activeTab === "users" && (
+        <div className="animate-fade-in space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-center bg-white/5 p-6 md:p-8 rounded-3xl border border-white/10 gap-4">
+            <div>
+              <h3 className="text-2xl font-bold text-white">Staff & User Directory</h3>
+              <p className="text-sm text-gray-400 mt-1">Manage Roles, Admins, and Delivery Personnel.</p>
+            </div>
+            <button onClick={fetchUsers} className="bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition whitespace-nowrap w-full md:w-auto">
+              🔄 Refresh Directory
+            </button>
+          </div>
+
+          <div className="bg-black/30 rounded-3xl border border-white/10 overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[600px]">
+                <thead className="bg-white/5 text-gray-400 text-xs uppercase font-black tracking-widest border-b border-white/10">
+                  <tr>
+                    <th className="p-6">User / Email</th>
+                    <th className="p-6">System Role</th>
+                    <th className="p-6">Joined Date</th>
+                    <th className="p-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="p-10 text-center text-gray-500 font-bold">No Users Found.</td>
+                    </tr>
+                  ) : (
+                    paginatedUsers.map((u) => (
+                      <tr key={u.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <td className="p-6">
+                          <p className="font-bold text-white text-lg">{u.fullName || "User"}</p>
+                          <p className="text-sm text-gray-400">{u.email}</p>
+                        </td>
+                        <td className="p-6">
+                          <span className={`px-4 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg border ${
+                            u.role === 'admin' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 
+                            u.role === 'deliveryboy' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 
+                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          }`}>
+                            {u.role || "customer"}
+                          </span>
+                        </td>
+                        <td className="p-6 text-gray-400 text-sm font-medium">
+                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "-"}
+                        </td>
+                        <td className="p-6 text-right">
+                          <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-lg font-bold text-sm transition">Manage</button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {usersList.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 bg-white/5 border-t border-white/10">
+                <span className="text-sm text-gray-400 font-medium">Page {usersPage} of {totalUserPages}</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setUsersPage(p => Math.max(p - 1, 1))} disabled={usersPage === 1} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Prev</button>
+                  <button onClick={() => setUsersPage(p => Math.min(p + 1, totalUserPages))} disabled={usersPage === totalUserPages} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Next</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

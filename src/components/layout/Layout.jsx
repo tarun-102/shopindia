@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Navbar from './Navbar';
 import Footer from "./Footer";
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useDispatch, useSelector } from "react-redux";
 import { auth, db } from "../../services/firebase";
@@ -12,7 +12,6 @@ import { saveCartToDB, getCartFromDB } from "../../services/cartService";
 import { setCartFromDB, clearCart } from "../../store/slices/CartSlice";
 
 const Layout = () => {
-
     const dispatch = useDispatch();
     const user = useSelector((state) => state.auth.user);
     const cart = useSelector((state) => state.cart);
@@ -54,16 +53,19 @@ const Layout = () => {
         if (user && user.uid && !isCartLoading) {
             saveCartToDB(user.uid, cart);
         }
-    }, [cart, user,isCartLoading]);
+    }, [cart, user, isCartLoading]);
 
     return (
-        <div className="min-h-screen">
-
+       
+        <div className="min-h-screen flex flex-col bg-[#0a0f16] text-gray-100 font-sans selection:bg-emerald-500/30">
+            
             <Navbar />
 
-            <main className="px-6 mt-8">
+            {/* Added flex-grow so footer stays at bottom, and made container responsive */}
+            <main className="flex-grow w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 transition-all duration-300">
                 <Outlet />
             </main>
+            
             <Footer />
         </div>
     )

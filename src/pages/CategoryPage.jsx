@@ -4,11 +4,11 @@ import { getProductsByCategory } from "../services/productservices";
 import ProductCard from "../components/ui/ProductCard";
 
 const CategoryPage = () => {
-  
   const { categoryName } = useParams(); 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch products whenever the category in the URL changes
   useEffect(() => {
     const fetchCategoryProducts = async () => {
       setLoading(true);
@@ -22,28 +22,54 @@ const CategoryPage = () => {
   }, [categoryName]); 
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-10 space-y-8">
+    <div className="max-w-7xl mx-auto p-4 md:p-10 space-y-8 min-h-[80vh]">
       
-      <div className="flex items-center gap-4 border-b border-white/10 pb-4">
-        <Link to="/" className="text-gray-400 hover:text-yellow-400 transition text-2xl">
-          ← Back
+      {/* Category Header Area */}
+      <div className="flex items-center gap-5 border-b border-white/10 pb-6">
+        <Link 
+          to="/" 
+          className="w-11 h-11 bg-white/5 hover:bg-emerald-500/20 text-gray-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/40 rounded-xl flex items-center justify-center transition-all shadow-sm"
+          title="Go Back"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
         </Link>
-        <h1 className="text-3xl font-black text-white uppercase tracking-wider">
-          {categoryName.replace("-", " ")}
+        <h1 className="text-3xl md:text-4xl font-black uppercase tracking-widest bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">
+          {categoryName ? categoryName.replace(/-/g, " ") : "Category"}
         </h1>
       </div>
 
+      {/* Dynamic Content Rendering */}
       {loading ? (
-        <div className="text-center text-yellow-400 text-2xl font-bold py-20 animate-pulse">
-          Loading Products... ⏳
+        // Premium Loading State
+        <div className="flex flex-col justify-center items-center py-24 gap-5">
+           <div className="relative flex justify-center items-center">
+               <div className="animate-spin rounded-full h-14 w-14 border-4 border-emerald-500/20 border-t-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.4)]"></div>
+               <div className="absolute w-4 h-4 bg-teal-400 rounded-full animate-pulse shadow-lg shadow-teal-500/60"></div>
+           </div>
+           <span className="text-emerald-400/80 text-sm font-semibold tracking-[0.2em] animate-pulse">
+               LOADING PRODUCTS...
+           </span>
         </div>
       ) : products.length === 0 ? (
-        <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-          <span className="text-6xl block mb-4">😢</span>
-          <h2 className="text-2xl font-bold text-white mb-2">No products found!</h2>
-          <p className="text-gray-400">Not Product Added </p>
+        // Premium Empty State
+        <div className="text-center py-24 bg-[#111827]/80 backdrop-blur-2xl rounded-[2rem] border border-white/5 shadow-2xl mx-auto max-w-3xl">
+          <span className="text-7xl block mb-6 opacity-80 grayscale">📦</span>
+          <h2 className="text-2xl font-bold text-white mb-3">No products found</h2>
+          <p className="text-gray-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">
+            We couldn't find any products in the <span className="text-emerald-400 font-semibold">{categoryName.replace(/-/g, " ")}</span> category right now. 
+            Please check back later or explore other items.
+          </p>
+          <Link 
+            to="/" 
+            className="inline-block mt-8 bg-white/10 hover:bg-white/20 text-white border border-white/10 font-bold px-8 py-3 rounded-xl transition-all"
+          >
+            Browse All Categories
+          </Link>
         </div>
       ) : (
+        // Product Grid Layout
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {products.map((item) => (
             <ProductCard key={item.id} product={item} />

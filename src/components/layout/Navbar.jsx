@@ -2,8 +2,6 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import GlassCard from "../ui/GlassCard"; 
 import { logoutUser } from "../../services/auth/authService";
-
-
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUserRedux } from "../../store/slices/authSlice"; 
 
@@ -13,6 +11,7 @@ const Navbar = () => {
 
   const user = useSelector((state) => state.auth.user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
   const isAdminUser = user?.role === "admin";
   const isDeliveryBoy = user?.role === "deliveryboy";
 
@@ -29,30 +28,36 @@ const Navbar = () => {
 
   return(
     <div className="px-4 pt-4 relative z-50">
-        <GlassCard className="px-6 py-4 flex justify-between items-center">
+        <GlassCard className="px-6 py-4 flex justify-between items-center bg-[#111827]/80 backdrop-blur-2xl border-white/10 shadow-lg">
+          
+          {/* Logo */}
           <h1 
             onClick={() => navigate("/")} 
-            className="text-2xl font-bold tracking-wide cursor-pointer text-white">
-              Shopindia
+            className="text-2xl font-black tracking-widest cursor-pointer bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent uppercase"
+          >
+            ShopIndia
           </h1>
           
-          <div className="hidden md:flex gap-6 text-lg items-center">
+          {/* Desktop Menu */}
+          <div className="hidden md:flex gap-6 text-sm font-bold uppercase tracking-wider items-center">
             <NavLink to="/"
-              className={({isActive}) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"} 
-            >Home</NavLink>
+              className={({isActive}) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"} 
+            >
+              Home
+            </NavLink>
           
             {user ? (
               <>
                 <NavLink 
                   to="/cart" 
-                  className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                  className={({ isActive }) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"}
                 >
                   Cart 🛒
                 </NavLink>
 
                 <NavLink 
                   to="/profile" 
-                  className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                  className={({ isActive }) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"}
                 >
                   Profile 👤
                 </NavLink>
@@ -60,15 +65,16 @@ const Navbar = () => {
                 {isAdminUser && (
                   <NavLink
                     to="/admin"
-                    className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                    className={({ isActive }) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"}
                   >
                     Admin
                   </NavLink>
                 )}
+                
                 {isDeliveryBoy && (
                   <NavLink
                     to="/delivery"
-                    className={({ isActive }) => isActive ? "text-yellow-400 font-semibold" : "text-white hover:text-yellow-300 transition"}
+                    className={({ isActive }) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"}
                   >
                     Delivery
                   </NavLink>
@@ -76,7 +82,7 @@ const Navbar = () => {
 
                 <button 
                   onClick={handleLogout}
-                  className="bg-red-500/80 text-white px-5 py-1.5 rounded-full hover:bg-red-500 transition font-semibold"
+                  className="bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500 hover:text-white px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95"
                 >
                   Logout
                 </button>
@@ -85,58 +91,62 @@ const Navbar = () => {
              <>
                <NavLink 
                 to="/login" 
-                className="bg-white/20 text-white px-5 py-1.5 rounded-full hover:bg-white/30 transition"
+                className="bg-white/5 border border-white/10 text-white px-6 py-2.5 rounded-xl hover:bg-white/10 transition-all active:scale-95"
               >
                 Login
               </NavLink>
               <NavLink 
                 to="/signup" 
-                className="bg-yellow-400 text-black px-5 py-1.5 rounded-full hover:bg-yellow-500 transition font-bold"
+                className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white px-6 py-2.5 rounded-xl hover:from-emerald-500 hover:to-teal-400 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
               >
                 Sign up
               </NavLink>
              </>
             )}
-          </div> {/* Desktop Menu */}
+          </div>
 
-          {/* mobile menu button */}
+          {/* Mobile Menu Toggle Button */}
           <div className="md:hidden flex items-center">
               <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)} 
-                className="text-2xl text-white focus:outline-none"
+                className="text-2xl text-emerald-400 focus:outline-none transition-transform"
               >
                 {isMenuOpen ? "✖️" : "☰"} 
               </button>
           </div>
         </GlassCard>
 
+        {/* Mobile Menu Dropdown */}
         {isMenuOpen && (
-        <div className="absolute top-20 left-4 right-4 md:hidden">
-          <GlassCard className="flex flex-col gap-4 p-5 text-lg">
-            <NavLink to="/" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Home</NavLink>
+        <div className="absolute top-24 left-4 right-4 md:hidden animate-fade-in">
+          <GlassCard className="flex flex-col gap-4 p-6 text-sm font-bold uppercase tracking-wider bg-[#111827]/95 backdrop-blur-3xl border-white/10 shadow-2xl">
+            <NavLink to="/" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Home</NavLink>
             
             {user ? (
               <>
-                <NavLink to="/cart" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Cart 🛒</NavLink>
-                <NavLink to="/profile" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Profile 👤</NavLink>
+                <NavLink to="/cart" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Cart 🛒</NavLink>
+                <NavLink to="/profile" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Profile 👤</NavLink>
+                
                 {isAdminUser && (
-                  <NavLink to="/admin" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Admin Dashboard</NavLink>
+                  <NavLink to="/admin" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Admin Dashboard</NavLink>
                 )}
+                
                 {isDeliveryBoy && (
-                  <NavLink to="/delivery" onClick={closeMenu} className="text-white hover:text-yellow-300 transition">Delivery Panel</NavLink>
+                  <NavLink to="/delivery" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Delivery Panel</NavLink>
                 )}
+                
                 <button 
                   onClick={handleLogout}
-                  className="bg-red-500/80 text-white px-4 py-2 rounded-xl text-center font-semibold mt-2"
+                  className="bg-rose-500/10 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-center mt-4 transition-all"
                 >
                   Logout
                 </button>
               </>
             ) : (
-              <>
-                <NavLink to="/login" onClick={closeMenu} className="bg-white/20 text-white px-4 py-2 rounded-xl text-center mt-2">Login</NavLink>
-                <NavLink to="/signup" onClick={closeMenu} className="bg-yellow-400 text-black px-4 py-2 rounded-xl text-center font-bold">Sign up</NavLink>
-              </>
+              <div className="flex flex-col gap-3 mt-2">
+                <NavLink to="/login" onClick={closeMenu} className="bg-white/5 border border-white/10 text-white px-4 py-3 rounded-xl text-center transition-all">Login</NavLink>
+                <NavLink to="/signup" onClick={closeMenu} className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white px-4 py-3 rounded-xl text-center shadow-lg shadow-emerald-500/20 transition-all">Sign up</NavLink>
+              </div>
             )}
           </GlassCard>
         </div>

@@ -1,14 +1,16 @@
-import GlassCard from "../components/ui/GlassCard";
-import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { loginUser } from "../services/auth/authService";
+import { useNavigate } from "react-router-dom";
+import GlassCard from "../components/ui/GlassCard";
 import Loader from "../components/ui/Loader";
 import ErrorBox from "../components/ui/ErrorBox";
-import { EmailAuthCredential } from "firebase/auth";
+import { loginUser } from "../services/auth/authService";
 
 const Login = () => {
   const navigate = useNavigate();
 
+  // ---------------------------------------------------------------------------
+  // Component States
+  // ---------------------------------------------------------------------------
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -17,61 +19,85 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // handle
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
+  
+  /**
+   * Updates state dynamically based on input field changes.
+   */
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  /**
+   * Handles user authentication and role-based routing.
+   */
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     const response = await loginUser(formData.email, formData.password);
+    
     if (response.success) {
-      if(response.role === "admin"){
-        navigate("/admin")
+      if (response.role === "admin") {
+        navigate("/admin");
       } else if (response.role === "deliveryboy") {
         navigate("/delivery");
       } else {
         navigate("/");
       }
-      
     } else {
       setError(response.error);
     }
+    
     setLoading(false);
   };
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <GlassCard className="p-10 w-full max-w-md border-white/10 shadow-2xl">
+      <GlassCard className="p-8 md:p-10 w-full max-w-md border-white/10 shadow-2xl bg-[#111827]/80 backdrop-blur-2xl rounded-[2rem]">
+        
+        {/* Header Section */}
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-black text-white mb-2">Welcome Back!</h2>
-          <p className="text-white/50">Login to your ShopIndia account</p>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">Welcome Back!</h2>
+          <p className="text-gray-400 text-sm">Login to your ShopIndia account</p>
         </div>
-        {error && <ErrorBox message={error} />}
+        
+        {/* Error Boundary */}
+        {error && (
+          <div className="mb-6">
+            <ErrorBox message={error} />
+          </div>
+        )}
 
+        {/* Form & Loading State */}
         {loading ? (
-          <Loader />
+          <div className="py-10">
+            <Loader />
+          </div>
         ) : (
           <form className="space-y-6" onSubmit={handleLogin}>
             <div className="space-y-2">
-              <label className="text-white/70 text-sm ml-1 font-semibold">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">
                 Email Address
               </label>
               <input
                 type="email"
                 name="email"
                 onChange={handleChange}
-                placeholder="e.g. tarun@example.com"
-                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
+                placeholder="e.g. user@example.com"
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-white/70 text-sm ml-1 font-semibold">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">
                 Password
               </label>
               <input
@@ -79,23 +105,25 @@ const Login = () => {
                 name="password"
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                 required
               />
             </div>
 
             <button 
               type="submit"
-              className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-yellow-500/20 uppercase tracking-widest">
+              className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black py-4 rounded-xl hover:from-emerald-500 hover:to-teal-400 hover:-translate-y-0.5 active:scale-95 transition-all shadow-lg shadow-emerald-500/30 uppercase tracking-widest mt-2"
+            >
               Sign In
             </button>
           </form>
         )}
 
-        <p className="text-center text-white/40 mt-8 text-sm">
+        {/* Footer Navigation */}
+        <p className="text-center text-gray-400 mt-8 text-sm font-medium">
           Don't have an account?{" "}
           <span
-            className="text-yellow-400 cursor-pointer hover:underline"
+            className="text-emerald-400 font-bold cursor-pointer hover:text-emerald-300 transition-colors"
             onClick={() => navigate("/signup")}
           >
             Sign Up

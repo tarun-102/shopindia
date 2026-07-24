@@ -1,13 +1,17 @@
+import { useState } from "react"; 
 import { useNavigate } from "react-router-dom";
 import GlassCard from "../components/ui/GlassCard";
-import {registerUser} from "../services/auth/authService" ;
-import { use, useState } from "react";
 import Loader from "../components/ui/Loader";
 import ErrorBox from "../components/ui/ErrorBox";
+import { registerUser } from "../services/auth/authService";
+
 const Signup = () => {
   const navigate = useNavigate();
 
-  const [formData,setFormData] = useState({
+  // ---------------------------------------------------------------------------
+  // Component States
+  // ---------------------------------------------------------------------------
+  const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
@@ -15,107 +19,134 @@ const Signup = () => {
   });
 
   const [error, setError] = useState("");
-  const [loading,setLoading] = useState(false)
-//form handle 
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) =>{
-    setFormData({...formData, [e.target.name]: e.target.value })
-  }
+  // ---------------------------------------------------------------------------
+  // Event Handlers
+  // ---------------------------------------------------------------------------
 
-  const handleSignup = async (e) =>{
+  /**
+   * Updates form state dynamically on input change.
+   */
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  /**
+   * Handles user registration, form validation, and routing.
+   */
+  const handleSignup = async (e) => {
     e.preventDefault();
     setError("");
 
-    if(formData.password !== formData.confirmPassword) {
-      return setError("Not match Confirm Password")
+    if (formData.password !== formData.confirmPassword) {
+      return setError("Passwords do not match.");
     }
-    setLoading(true)
+    
+    setLoading(true);
 
-    const response = await registerUser(formData.name, formData.email, formData.password)
+    const response = await registerUser(formData.name, formData.email, formData.password);
 
-    if(response.success){
-      alert("Account successfully Created")
-      navigate('/login')
+    if (response.success) {
+      alert("Account successfully created!");
+      navigate('/login');
     } else {
-      setError(response.error)
+      setError(response.error);
     }
-    setLoading(false)
-  }
+    
+    setLoading(false);
+  };
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
-      <GlassCard className="p-10 w-full max-w-md border-white/10 shadow-2xl">
+      <GlassCard className="p-8 md:p-10 w-full max-w-md border-white/10 shadow-2xl bg-[#111827]/80 backdrop-blur-2xl rounded-[2rem]">
+        
+        {/* Header Section */}
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-black text-white mb-2">Create Your Account</h2>
-          <p className="text-white/50">Register now to access exclusive offers and fast checkout.</p>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">Create Your Account</h2>
+          <p className="text-gray-400 text-sm">Register now to access exclusive offers and fast checkout.</p>
         </div>
-      {error && <ErrorBox message={error} /> }
 
-      {loading ? (
-        <Loader /> 
-      ) : (
-                <form className="space-y-5" onSubmit={handleSignup}>
-          <div className="space-y-2">
-            <label className="text-white/70 text-sm ml-1 font-semibold">Full Name</label>
-            <input 
-              type="text" 
-              name="name"
-              placeholder="e.g. Aman SHah" 
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
-              onChange={handleChange}
-              required 
-            />
+        {/* Error Boundary */}
+        {error && (
+          <div className="mb-6">
+            <ErrorBox message={error} />
           </div>
+        )}
 
-          <div className="space-y-2">
-            <label className="text-white/70 text-sm ml-1 font-semibold">Email Address</label>
-            <input 
-              type="email" 
-              name="email"
-              placeholder="aman@example.com" 
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
-              onChange={handleChange}
-              required 
-            />
+        {/* Form & Loading State */}
+        {loading ? (
+          <div className="py-10">
+            <Loader />
           </div>
+        ) : (
+          <form className="space-y-5" onSubmit={handleSignup}>
+            <div className="space-y-2">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">Full Name</label>
+              <input 
+                type="text" 
+                name="name"
+                placeholder="e.g. Niraj Katariya" 
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-white/70 text-sm ml-1 font-semibold">Password</label>
-            <input 
-              type="password" 
-              name="password"
-              placeholder="Create a strong password" 
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
+            <div className="space-y-2">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">Email Address</label>
+              <input 
+                type="email" 
+                name="email"
+                placeholder="user@example.com" 
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
-              onChange={handleChange}
-              required 
-            />
-          </div>
+            <div className="space-y-2">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">Password</label>
+              <input 
+                type="password" 
+                name="password"
+                placeholder="Create a strong password" 
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-white/70 text-sm ml-1 font-semibold">Confirm Password</label>
-            <input 
-              type="password" 
-              name="confirmPassword"
-              placeholder="Repeat your password" 
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-yellow-400 transition-all"
-              onChange={handleChange}
-              required 
-            />
-          </div>
+            <div className="space-y-2">
+              <label className="text-gray-300 text-xs uppercase font-bold tracking-widest ml-1">Confirm Password</label>
+              <input 
+                type="password" 
+                name="confirmPassword"
+                placeholder="Repeat your password" 
+                className="w-full bg-black/40 border border-gray-700 p-4 rounded-xl text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
-          <button className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black py-4 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-yellow-500/20 uppercase tracking-widest mt-4" type="submit" >
-            Create Account 🚀
-          </button>
-        </form>
-      ) }
+            <button 
+              type="submit"
+              className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black py-4 rounded-xl hover:from-emerald-500 hover:to-teal-400 hover:-translate-y-0.5 active:scale-95 transition-all shadow-lg shadow-emerald-500/30 uppercase tracking-widest mt-4"
+            >
+              Create Account 🚀
+            </button>
+          </form>
+        )}
 
-
-        <p className="text-center text-white/40 mt-8 text-sm">
+        {/* Footer Navigation */}
+        <p className="text-center text-gray-400 mt-8 text-sm font-medium">
           Already have an account?{" "}
           <span 
             onClick={() => navigate('/login')}
-            className="text-yellow-400 cursor-pointer hover:underline font-bold"
+            className="text-emerald-400 font-bold cursor-pointer hover:text-emerald-300 transition-colors"
           >
             Login Here
           </span>
