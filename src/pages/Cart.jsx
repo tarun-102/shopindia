@@ -229,7 +229,13 @@ const Cart = () => {
                 <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10">
                   <button onClick={() => dispatch(removeFromCart(item.id))} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-rose-500/80 hover:text-white text-gray-300 font-black text-xl transition-colors">−</button>
                   <span className="text-white font-black text-lg w-6 text-center">{item.quantity}</span>
-                  <button onClick={() => dispatch(addToCart(item))} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-emerald-500/80 hover:text-white text-gray-300 font-black text-xl transition-colors">+</button>
+                  <button
+                    onClick={() => dispatch(addToCart(item))}
+                    disabled={item.stock > 0 && item.quantity >= item.stock}
+                    className={`w-10 h-10 rounded-xl bg-white/5 text-gray-300 font-black text-xl transition-colors ${item.stock > 0 && item.quantity >= item.stock ? 'opacity-40 cursor-not-allowed hover:bg-white/5' : 'hover:bg-emerald-500/80 hover:text-white'}`}
+                  >
+                    +
+                  </button>
                 </div>
                 <div className="text-right hidden sm:block w-24">
                   <p className="text-gray-500 text-[10px] uppercase font-black tracking-widest mb-1">Subtotal</p>

@@ -70,9 +70,10 @@ function ProductCard({ product }) {
           <button
             type="button"
             onClick={handleAddToCart}
-            className="mt-5 w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/20 py-2.5 rounded-xl hover:from-emerald-500 hover:to-teal-400 active:scale-95 transition-all duration-300 font-bold text-sm flex items-center justify-center gap-2 border border-emerald-400/20"
+            disabled={Number(product.stock || 0) <= 0}
+            className={`mt-5 w-full bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/20 py-2.5 rounded-xl active:scale-95 transition-all duration-300 font-bold text-sm flex items-center justify-center gap-2 border border-emerald-400/20 ${Number(product.stock || 0) <= 0 ? 'opacity-50 cursor-not-allowed grayscale hover:from-emerald-600 hover:to-teal-500' : 'hover:from-emerald-500 hover:to-teal-400'}`}
           >
-            <span>Add to Cart</span>
+            <span>{Number(product.stock || 0) <= 0 ? 'Out of Stock' : 'Add to Cart'}</span>
             <span className="transform group-hover:translate-x-1 group-hover:scale-110 transition-all duration-300">🛒</span>
           </button>
         </div>

@@ -13,14 +13,27 @@ const cartSlice = createSlice({
     name: 'cart',
     initialState,
     reducers: {
-        addToCart(state, action) {
+            addToCart(state, action) {
             const newItem = action.payload;
-        if (Number(newItem.stock || 0) <= 0) {
-            return;
-        }
+            const price = Number(newItem.price || 0);
             const existingItem = state.items.find((item) => String(item.id) === String(newItem.id));
+            const stock = Number(newItem.stock ?? existingItem?.stock ?? 0);
 
-            state.totalQuantity++;
+            // Only prevent adding a brand new item when its stock is unavailable.
+            if (!existingItem && stock <= 0) {
+                return;
+            }
+
+            // Prevent increasing quantity beyond known stock.
+            if (existingItem && stock > 0 && existingItem.quantity >= stock) {
+                return;
+            }
+
+            if (price <= 0) {
+                return;
+            }
+
+            state.totalQuantity += 1;
             state.totalAmount = Number(state.totalAmount || 0) + price;
 
             if (!existingItem) {
@@ -31,12 +44,15 @@ const cartSlice = createSlice({
                     totalPrice: price,
                     title: newItem.title,
                     image: newItem.thumbnail || newItem.image,
+                    stock,
                 });
             } else {
-                existingItem.quantity++;
+                existingItem.quantity += 1;
                 existingItem.totalPrice = Number(existingItem.totalPrice || 0) + price;
+                if (stock > 0) {
+                    existingItem.stock = stock;
+                }
             }
-
 
         },
 
