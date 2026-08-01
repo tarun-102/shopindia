@@ -293,24 +293,30 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
 export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
-        const orderSnap = await getDoc(orderRef);
-        if (!orderSnap.exists()) {
-            return { success: false, error: "Order record not found." };
-        }
-        const orderData = orderSnap.data();
-        
-        if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
-            return { success: false, error: "Order is already assigned." };
-        }
-        // Generate a 4-digit OTP for secure handover and save it on the order
+
+        // Use a transaction to prevent concurrent assignments (race conditions).
         const otp = String(Math.floor(1000 + Math.random() * 9000));
 
-        await updateDoc(orderRef, {
-            status: "Out for Delivery 🚚",
-            assignedTo: deliveryBoyId,
-            otp: otp,
-            otpVerified: false
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) {
+                throw new Error("Order record not found.");
+            }
+
+            const orderData = orderSnap.data();
+            if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
+                throw new Error("Order is already assigned.");
+            }
+
+            // Commit the assignment atomically
+            transaction.update(orderRef, {
+                status: "Out for Delivery 🚚",
+                assignedTo: deliveryBoyId,
+                otp: otp,
+                otpVerified: false,
+            });
         });
+
         return { success: true };
     } catch (error) {
         console.error("Error assigning order:", error);
