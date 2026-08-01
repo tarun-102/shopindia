@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from 'react-hot-toast';
 import { useLoaderData, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { addToCart } from "../store/slices/CartSlice";
@@ -20,7 +21,6 @@ const ProductDetails = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [reviewList, setReviewList] = useState(product.review || []);
-  const [alertIcon, setAlertIcon] = useState({ show: false, message: "", icon: "" });
 
   // Sync reviews when product changes
   useEffect(() => {
@@ -31,24 +31,17 @@ const ProductDetails = () => {
   // Custom Alert Notification Trigger
   // ---------------------------------------------------------------------------
   const showCustomAlert = (message, icon) => {
-    setAlertIcon({
-      show: true,
-      message,
-      icon,
-    });
-    setTimeout(() => {
-      setAlertIcon({
-        show: false,
-        message: "",
-        icon: "",
-      });
-    }, 4000);
+    toast.success(`${icon || ''} ${message}`);
   };
 
   // ---------------------------------------------------------------------------
   // Action Handlers
   // ---------------------------------------------------------------------------
   const handleAddToCart = () => {
+    if (Number(product.stock || 0) <= 0) {
+      toast.error('This product is out of stock and cannot be added to cart.');
+      return;
+    }
     dispatch(addToCart(product));
     showCustomAlert(`${product.title} added to cart successfully`, "🛒");
   };
@@ -85,15 +78,7 @@ const ProductDetails = () => {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-10 space-y-16 relative">
       
-      {/* Floating Custom Toast Notification */}
-      {alertIcon.show && (
-        <div className="fixed top-24 right-5 md:right-10 z-50 animate-bounce">
-          <div className="bg-[#111827]/95 backdrop-blur-2xl border border-emerald-500/40 shadow-2xl px-6 py-4 rounded-2xl flex items-center gap-3 text-white">
-            <span className="text-2xl">{alertIcon.icon}</span>
-            <p className="font-semibold tracking-wide text-emerald-300">{alertIcon.message}</p>
-          </div>
-        </div>
-      )}
+      {/* Notifications use react-hot-toast */}
 
       {/* Main Product Showcase Card */}
       <GlassCard className="p-6 md:p-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center bg-[#111827]/80 backdrop-blur-2xl border-white/10 rounded-[2.5rem] shadow-2xl">
@@ -128,12 +113,15 @@ const ProductDetails = () => {
 
           <div className="space-y-1">
             <p className="text-gray-500 text-sm line-through">M.R.P.: ₹ {formatPrice(product.price + 50)}</p>
-            <div className="flex items-baseline gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-4xl font-black text-emerald-400">
                 ₹ {formatPrice(product.price)}
               </span>
               <span className="text-teal-400 font-bold text-sm bg-teal-500/10 px-2.5 py-1 rounded-md border border-teal-500/20">
                 Save {product.discountPercentage || 15}%
+              </span>
+              <span className={`text-xs uppercase font-bold px-3 py-1 rounded-full ${Number(product.stock || 0) > 0 ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'}`}>
+                {Number(product.stock || 0) > 0 ? `In stock: ${product.stock}` : 'Out of Stock'}
               </span>
             </div>
           </div>
@@ -142,19 +130,25 @@ const ProductDetails = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
             <button
               onClick={handleAddToCart}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-4 rounded-xl transition-all flex justify-center items-center gap-2 shadow-sm"
+              disabled={Number(product.stock || 0) <= 0}
+              className={`bg-white/5 border border-white/10 font-bold py-4 rounded-xl transition-all flex justify-center items-center gap-2 shadow-sm ${Number(product.stock || 0) <= 0 ? 'text-gray-400 cursor-not-allowed opacity-60 hover:bg-white/5' : 'text-white hover:bg-white/10'}`}
             >
-              Add to Cart 🛒
+              {Number(product.stock || 0) <= 0 ? 'Out of Stock' : 'Add to Cart 🛒'}
             </button>
 
             <button
               onClick={() => {
+                if (Number(product.stock || 0) <= 0) {
+                  toast.error('This product is out of stock and cannot be purchased.');
+                  return;
+                }
                 dispatch(addToCart(product));
                 navigate('/cart');
               }}
-              className="bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black py-4 rounded-xl hover:from-emerald-500 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/30 flex justify-center items-center gap-2"
+              disabled={Number(product.stock || 0) <= 0}
+              className={`bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-emerald-500/30 flex justify-center items-center gap-2 ${Number(product.stock || 0) <= 0 ? 'opacity-60 cursor-not-allowed grayscale' : 'hover:from-emerald-500 hover:to-teal-400'}`}
             >
-              Buy Now ⚡
+              {Number(product.stock || 0) <= 0 ? 'Unavailable' : 'Buy Now ⚡'}
             </button>
           </div>
         </div>

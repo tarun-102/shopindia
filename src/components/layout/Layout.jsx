@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { auth, db } from "../../services/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { loginUserRedux, logoutUserRedux } from "../../store/slices/authSlice";
 import { saveCartToDB, getCartFromDB } from "../../services/cartService";
 import { setCartFromDB, clearCart } from "../../store/slices/CartSlice";
@@ -31,10 +31,45 @@ const Layout = () => {
                     console.error("User role fetch error:", error);
                 }
 
+                // Fetch full user document including wallet
+                let userWallet = { balance: 0, lastMonthlyCredit: null };
+                try {
+                    const userDocRef = doc(db, "users", currentUser.uid);
+                    const userDocSnapFull = await getDoc(userDocRef);
+                    if (userDocSnapFull.exists()) {
+                        const userData = userDocSnapFull.data();
+                        userWallet = userData.wallet || userWallet;
+
+                        // Monthly credit logic: credit once per calendar month when user logs in
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, "0");
+                        const monthKey = `${year}-${month}`;
+                        const dayOfMonth = now.getDate();
+
+                        if (userWallet.lastMonthlyCredit !== monthKey && dayOfMonth >= 1) {
+                            const newBalance = (userWallet.balance || 0) + 500;
+                            try {
+                                await updateDoc(userDocRef, {
+                                    "wallet.balance": newBalance,
+                                    "wallet.lastMonthlyCredit": monthKey,
+                                });
+                                userWallet.balance = newBalance;
+                                userWallet.lastMonthlyCredit = monthKey;
+                            } catch (err) {
+                                console.error("Failed to apply monthly wallet credit:", err);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("User document fetch error:", err);
+                }
+
                 dispatch(loginUserRedux({
                     uid: currentUser.uid,
                     email: currentUser.email,
                     role: userRole,
+                    wallet: userWallet,
                 }));
 
                 const dbCart = await getCartFromDB(currentUser.uid);

@@ -6,9 +6,10 @@ import { formatPrice } from "../utils/priceFormatter";
 import { useNavigate } from "react-router-dom";
 
 // Firebase and Service Imports
-import { auth } from "../services/firebase"; 
+import { auth, db } from "../services/firebase"; 
 import { placeOrderInDB } from "../services/productservices";
 import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 const Cart = () => {
   const cartItems = useSelector((state) => state.cart.items);
@@ -60,6 +61,33 @@ const Cart = () => {
     // Simulated processing delay for UI experience
     setTimeout(async () => {
       // Construct the order object with Pending status for the 40-second window
+      // If paying with wallet, verify and deduct balance first
+      if (paymentMethod === "wallet") {
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userRef);
+          const wallet = (userSnap.exists() && userSnap.data().wallet) || { balance: 0 };
+          if ((wallet.balance || 0) < totalAmount) {
+            alert("Insufficient wallet balance. Please choose another payment method or top-up your wallet.");
+            setIsProcessing(false);
+            return;
+          }
+          await updateDoc(userRef, { "wallet.balance": (wallet.balance || 0) - totalAmount });
+          // record debit transaction
+          try {
+            const { addWalletTransaction } = await import("../services/walletService");
+            await addWalletTransaction(currentUser.uid, { type: "debit", amount: totalAmount, note: `Order Payment (${new Date().toLocaleDateString()})`, meta: { orderAutoRecord: true } });
+          } catch (err) {
+            console.warn("Failed to record wallet transaction:", err);
+          }
+        } catch (err) {
+          console.error("Wallet deduction failed:", err);
+          alert("Failed to process wallet payment. Please try again.");
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       const newOrder = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -125,7 +153,10 @@ const Cart = () => {
               <span>Order ID</span><span className="text-white font-mono bg-white/5 px-3 py-1 rounded-lg">{createdOrderId}</span>
             </div>
             <div className="flex justify-between items-center pb-2 border-b border-white/5">
-              <span>Payment Method</span><span className="text-white font-semibold uppercase tracking-wider">{placedOrderInfo?.paymentMethod === 'card' ? 'Credit / Debit Card' : placedOrderInfo?.paymentMethod === 'upi' ? 'UPI Payment' : 'Cash on Delivery'}</span>
+              <span>Payment Method</span>
+              <span className="text-white font-semibold uppercase tracking-wider">
+                {placedOrderInfo?.paymentMethod === 'card' ? 'Credit / Debit Card' : placedOrderInfo?.paymentMethod === 'upi' ? 'UPI Payment' : placedOrderInfo?.paymentMethod === 'wallet' ? 'Wallet Balance' : 'Cash on Delivery'}
+              </span>
             </div>
             <div className="flex justify-between items-center pb-2 border-b border-white/5">
               <span>Amount Paid</span><span className="text-emerald-400 font-black text-lg">₹ {formatPrice(placedOrderInfo?.totalAmount || 0)}</span>
@@ -250,7 +281,7 @@ const Cart = () => {
                 {/* Payment Options Selection */}
                 <div className="space-y-4 pt-2">
                   <p className="text-emerald-400 text-xs uppercase font-black tracking-widest">Payment Method</p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("card")}
@@ -271,6 +302,13 @@ const Cart = () => {
                       className={`rounded-xl px-2 py-3 text-sm font-bold border transition-all ${paymentMethod === "cod" ? "border-emerald-500 bg-emerald-500/20 text-white shadow-inner" : "border-gray-700 bg-black/30 text-gray-400 hover:bg-white/5"}`}
                     >
                       C.O.D
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("wallet")}
+                      className={`rounded-xl px-2 py-3 text-sm font-bold border transition-all ${paymentMethod === "wallet" ? "border-emerald-500 bg-emerald-500/20 text-white shadow-inner" : "border-gray-700 bg-black/30 text-gray-400 hover:bg-white/5"}`}
+                    >
+                      Wallet
                     </button>
                   </div>
                 </div>

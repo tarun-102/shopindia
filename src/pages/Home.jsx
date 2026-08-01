@@ -22,13 +22,16 @@ const Home = () => {
   // Data Fetching & Slicing Logic
   // ---------------------------------------------------------------------------
   
+  const inStockProducts = products.filter((product) => Number(product.stock || 0) > 0);
+  const displayedCategories = showAllCategories ? category : category.slice(0, 5);
+
   // Fetch real top selling products based on actual order history
   useEffect(() => {
     const fetchTopSellers = async () => {
       setIsLoadingTopProducts(true);
       const realTopSellers = await getTopSellingProducts();
       
-      // Fallback to random/first 4 products if no orders exist in DB yet
+      // Fallback to all products if no top sellers exist
       if (realTopSellers && realTopSellers.length > 0) {
         setTopProducts(realTopSellers.slice(0, 4));
       } else {
@@ -39,9 +42,6 @@ const Home = () => {
 
     fetchTopSellers();
   }, [products]);
-  
-  // Category toggle logic
-  const displayedCategories = showAllCategories ? category : category.slice(0, 5);
 
   // Pagination configuration for All Products
   const productsPerPage = 8; 

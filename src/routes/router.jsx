@@ -8,6 +8,7 @@ import Layout from "../components/layout/Layout";
 import Home from "../pages/Home";
 import Admin from "../pages/Admin";
 import DeliveryPanel from "../pages/DeliveryPanel";
+import Wallet from "../pages/Wallet";
 import Profile from "../pages/Profile";
 import Login from "../pages/Login";
 import Cart from "../pages/Cart";
@@ -26,6 +27,7 @@ const router = createBrowserRouter(
       <Route element={<ProtectedRoutes />}>
         <Route path="cart" element={<Cart />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="wallet" element={<Wallet />} />
         <Route element={<ProtectedRoutes requiredRole="admin" />}>
           <Route path="admin" element={<Admin />} />
         </Route>

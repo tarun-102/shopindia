@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import toast from 'react-hot-toast';
 import { useSelector } from "react-redux";
 import { 
-  addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB,
+  addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB, updateProductStock,
   getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB 
 } from "../services/productservices";
 import { getAllUsers } from "../services/auth/authService"; 
@@ -60,10 +61,13 @@ const Admin = () => {
   const [productsPage, setProductsPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
   const [usersPage, setUsersPage] = useState(1); 
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryCategory, setInventoryCategory] = useState("");
   
   const productsPerPage = 5; 
   const ordersPerPage = 5;
   const usersPerPage = 5; 
+  const inventoryPerPage = 6;
 
   // ---------------------------------------------------------------------------
   // Real Analytics Calculations (Synced with Firestore Orders List)
@@ -82,13 +86,15 @@ const Admin = () => {
   const paginatedProducts = productsList.slice((productsPage - 1) * productsPerPage, productsPage * productsPerPage);
   const paginatedOrders = ordersList.slice((ordersPage - 1) * ordersPerPage, ordersPage * ordersPerPage);
   const paginatedUsers = usersList.slice((usersPage - 1) * usersPerPage, usersPage * usersPerPage); 
+  const filteredInventory = inventoryCategory ? productsList.filter(p => p.category === inventoryCategory) : productsList.slice();
+  const totalInventoryPages = Math.max(1, Math.ceil(filteredInventory.length / inventoryPerPage));
+  const paginatedInventory = filteredInventory.slice((inventoryPage - 1) * inventoryPerPage, inventoryPage * inventoryPerPage);
 
   // ---------------------------------------------------------------------------
-  // Helper Functions
+  // Helper Functions (use react-hot-toast for premium notifications)
   // ---------------------------------------------------------------------------
   const showCustomAlert = (message, icon) => {
-    setAlertData({ show: true, message, icon });
-    setTimeout(() => setAlertData({ show: false, message: "", icon: "" }), 4000); 
+    toast.success(`${icon || ''} ${message}`);
   };
 
   // ---------------------------------------------------------------------------
@@ -193,19 +199,11 @@ const Admin = () => {
   return (
     <div className="max-w-7xl mx-auto mt-8 p-4 md:p-8 bg-[#0a0f16]/85 backdrop-blur-3xl rounded-[2.5rem] border border-white/5 shadow-2xl text-white relative min-h-[85vh]">
       
-      {/* Toast Notification */}
-      {alertData.show && (
-        <div className="fixed top-24 right-5 z-[100] animate-bounce">
-          <div className="bg-[#111827] backdrop-blur-xl border border-emerald-500/40 shadow-emerald-500/20 px-6 py-4 rounded-2xl flex items-center gap-3">
-            <span className="text-2xl">{alertData.icon}</span>
-            <p className="font-semibold text-emerald-300">{alertData.message}</p>
-          </div>
-        </div>
-      )}
+      {/* Notifications use react-hot-toast */}
 
       {/* Confirmation Modal */}
       {confirmDialog.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/80 backdrop-blur-md p-4 pt-20 animate-fade-in overflow-auto">
           <div className="bg-[#111827] border border-white/10 shadow-2xl p-8 rounded-3xl max-w-md w-full text-center">
             <div className="text-5xl mb-4">⚠️</div>
             <h3 className="text-2xl font-black text-white mb-2">Are you sure?</h3>
@@ -236,9 +234,10 @@ const Admin = () => {
       <div className="flex flex-wrap gap-3 mb-10 border-b border-white/10 pb-6">
         {[
           { id: "analytics", label: "📊 Analytics Dashboard" },
-          { id: "products", label: "📦 Manage Products" },
-          { id: "orders", label: "🛒 Manage Orders" },
-          { id: "users", label: "👥 Users & Staff" }
+            { id: "products", label: "📦 Manage Products" },
+            { id: "inventory", label: "📦 Inventory Management" },
+            { id: "orders", label: "🛒 Manage Orders" },
+            { id: "users", label: "👥 Users & Staff" }
         ].map((tab) => (
           <button 
             key={tab.id}
@@ -292,6 +291,92 @@ const Admin = () => {
               <p className="text-xs text-indigo-500/80 mt-2">Registered Accounts</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================
+          TAB: INVENTORY MANAGEMENT
+      =================================================================== */}
+      {activeTab === "inventory" && (
+        <div className="animate-fade-in space-y-6">
+          <div className="flex items-center justify-between bg-white/5 p-6 rounded-3xl border border-white/10">
+            <div>
+              <h3 className="text-2xl font-bold">Inventory Management</h3>
+              <p className="text-sm text-gray-400 mt-1">View and update product stock levels — premium controls.</p>
+            </div>
+            <div className="flex gap-3 items-center">
+              <select value={inventoryCategory} onChange={(e) => { setInventoryCategory(e.target.value); setInventoryPage(1); }} className="bg-black/40 border border-gray-700 text-white px-4 py-2 rounded-xl">
+                <option value="">All Categories</option>
+                {categoriesList.map(c => <option key={c.id} value={c.value}>{c.icon} {c.name}</option>)}
+              </select>
+              <button onClick={() => { setInventoryCategory(""); setInventoryPage(1); fetchProducts(); }} className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg">Refresh</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {paginatedInventory.map((p) => (
+              <div key={p.id} className="bg-gradient-to-br from-[#071018] to-[#0b1220] border border-white/6 p-6 rounded-3xl shadow-2xl flex items-center gap-6">
+                <div className="w-28 h-28 bg-white rounded-2xl p-2 flex items-center justify-center border border-gray-700 shadow-inner shrink-0">
+                  <img src={p.thumbnail} alt={p.title} className="w-full h-full object-contain" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="font-black text-lg text-white">{p.title}</h4>
+                      <p className="text-sm text-gray-400 mt-1 line-clamp-2">{p.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-emerald-400 font-black text-xl">₹{formatPrice(p.price)}</p>
+                      <p className="text-xs text-gray-400 mt-1">SKU: {p.id}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                      <p className="text-xs text-gray-400 uppercase font-bold">Stock</p>
+                      <p className="text-white font-black text-lg mt-1">{p.stock ?? 0}</p>
+                    </div>
+
+                    <input type="number" min="0" defaultValue={p.stock ?? 0} id={`stock-input-${p.id}`} className="px-4 py-2 rounded-xl bg-black/30 border border-gray-700 text-white outline-none w-40" />
+
+                    <button onClick={async () => {
+                      const el = document.getElementById(`stock-input-${p.id}`);
+                      const val = el ? Number(el.value) : 0;
+                      const res = await updateProductStock(p.id, val);
+                      if (res.success) {
+                        showCustomAlert(`Stock updated to ${val} for ${p.title}`, "✅");
+                        fetchProducts();
+                      } else {
+                        showCustomAlert(res.error || "Failed to update stock", "⚠️");
+                      }
+                    }} className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold">Set Stock</button>
+
+                    <button onClick={async () => {
+                      const el = document.getElementById(`stock-input-${p.id}`);
+                      const add = el ? Number(el.value) : 0;
+                      const newStock = (p.stock || 0) + add;
+                      const res = await updateProductStock(p.id, newStock);
+                      if (res.success) {
+                        showCustomAlert(`Added ${add} units. New stock: ${newStock}`, "✅");
+                        fetchProducts();
+                      } else {
+                        showCustomAlert(res.error || "Failed to add stock", "⚠️");
+                      }
+                    }} className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold">Add Stock +</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {filteredInventory.length > inventoryPerPage && (
+            <div className="flex items-center justify-between px-6 py-4 bg-white/5 rounded-2xl border border-white/10 mt-6">
+              <span className="text-sm text-gray-400 font-medium">Page {inventoryPage} of {totalInventoryPages}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setInventoryPage(p => Math.max(p - 1, 1))} disabled={inventoryPage === 1} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Prev</button>
+                <button onClick={() => setInventoryPage(p => Math.min(p + 1, totalInventoryPages))} disabled={inventoryPage === totalInventoryPages} className="px-5 py-2 rounded-xl bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 transition font-bold text-sm">Next</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

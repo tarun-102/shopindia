@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { auth } from "../services/firebase"; 
+import { auth, db } from "../services/firebase"; 
+import { doc, updateDoc, getDoc } from "firebase/firestore";
+import toast from 'react-hot-toast';
+import Modal from '../components/ui/Modal';
 import GlassCard from "../components/ui/GlassCard";
 import { formatPrice } from "../utils/priceFormatter";
 import { getUserOrders, cancelOrderInDB, updateOrderStatusInDB } from "../services/productservices";
@@ -17,8 +20,8 @@ const Profile = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 3;
 
-  // Toast Notification State
-  const [alertData, setAlertData] = useState({ show: false, message: "", icon: "" });
+  // Track OTP toasts already shown this session
+  const [shownOtps, setShownOtps] = useState([]);
 
   // Confirmation Modal State
   const [confirmDialog, setConfirmDialog] = useState({
@@ -27,14 +30,8 @@ const Profile = () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Helper Functions
+  // Helper Functions (use react-hot-toast for premium toasts)
   // ---------------------------------------------------------------------------
-  const showCustomAlert = (message, icon) => {
-    setAlertData({ show: true, message, icon });
-    setTimeout(() => {
-      setAlertData({ show: false, message: "", icon: "" });
-    }, 3500); 
-  };
 
   // ---------------------------------------------------------------------------
   // Effects & Subscriptions
@@ -52,6 +49,38 @@ const Profile = () => {
     window.scrollTo(0, 0);
     return () => unsubscribe();
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Wallet Top-up
+  // ---------------------------------------------------------------------------
+  const handleAddMoney = async () => {
+    setShowAddMoneyModal(true);
+  };
+
+  const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
+  const [addMoneyAmount, setAddMoneyAmount] = useState(500);
+
+  const submitAddMoney = async () => {
+    if (!currentUser) return;
+    const amount = Number(addMoneyAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Invalid amount entered.");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const wallet = (userSnap.exists() && userSnap.data().wallet) || { balance: 0 };
+      const newBalance = (wallet.balance || 0) + amount;
+      await updateDoc(userRef, { "wallet.balance": newBalance });
+      toast.success(`₹${amount} added to wallet. New balance: ₹${newBalance}`);
+      setShowAddMoneyModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to add money to wallet.");
+    }
+  };
 
   /**
    * Periodic check interval: after 40 seconds, automatically transitions 
@@ -117,11 +146,23 @@ const Profile = () => {
       setOrders(orders.map(order => 
         order.id === orderId ? { ...order, status: "Cancelled 🔴" } : order
       ));
-      showCustomAlert("Order Cancelled Successfully", "🚫");
+      toast.success("Order Cancelled Successfully");
     } else {
-      showCustomAlert(result.error || "Unable to cancel order.", "⚠️");
+      toast.error(result.error || "Unable to cancel order.");
     }
   };
+
+  // When orders update, show delivery OTPs as premium toasts once per order
+  useEffect(() => {
+    orders.forEach((order) => {
+      if (order.otp && order.status?.toLowerCase().includes("out for delivery")) {
+        if (!shownOtps.includes(order.id)) {
+          toast.info(`Delivery OTP for order ${order.id.slice(0,6)}: ${order.otp}`, { duration: 10000 });
+          setShownOtps((s) => [...s, order.id]);
+        }
+      }
+    });
+  }, [orders]);
 
   // ---------------------------------------------------------------------------
   // Pagination Calculations
@@ -149,15 +190,7 @@ const Profile = () => {
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-10 space-y-10 relative min-h-[85vh]">
       
-      {/* Toast Notification Alert */}
-      {alertData.show && (
-        <div className="fixed top-24 right-5 md:right-10 z-[100] animate-bounce">
-          <div className="bg-[#111827]/95 backdrop-blur-2xl border border-emerald-500/40 shadow-[0_10px_40px_rgba(16,185,129,0.2)] px-6 py-4 rounded-2xl flex items-center gap-3 text-white">
-            <span className="text-2xl">{alertData.icon}</span>
-            <p className="font-semibold tracking-wide text-emerald-300">{alertData.message}</p>
-          </div>
-        </div>
-      )}
+      {/* react-hot-toast Toaster handles notifications */}
 
       {/* Confirmation Modal */}
       {confirmDialog.show && (
@@ -205,6 +238,14 @@ const Profile = () => {
             <p className="text-gray-300 font-medium text-sm md:text-base">
               {currentUser?.email}
             </p>
+            <div className="mt-3">
+              <button
+                onClick={handleAddMoney}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg font-bold text-sm"
+              >
+                Add Money to Wallet
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -288,6 +329,13 @@ const Profile = () => {
                         Cancellation window expired
                       </span>
                     ) : null}
+
+                    {/* Show OTP to customer when order is out for delivery */}
+                    {order.status?.toLowerCase().includes("out for delivery") && order.otp && (
+                      <div className="mt-2 text-xs bg-white/5 border border-white/10 px-3 py-2 rounded-lg text-emerald-300 font-bold">
+                        Delivery OTP: <span className="ml-2 text-white font-mono">{order.otp}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -351,6 +399,19 @@ const Profile = () => {
           </div>
         </div>
       )}
+
+      <Modal show={showAddMoneyModal} title="Add Money to Wallet" onClose={() => setShowAddMoneyModal(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-400">Amount (INR)</label>
+            <input type="number" value={addMoneyAmount} onChange={(e) => setAddMoneyAmount(e.target.value)} className="w-full mt-2 px-4 py-3 rounded-xl bg-black/30 border border-gray-700 text-white outline-none" />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => setShowAddMoneyModal(false)} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">Cancel</button>
+            <button onClick={submitAddMoney} className="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold">Add Money</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

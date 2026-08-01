@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, query, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, query, onSnapshot, runTransaction } from "firebase/firestore";
 
 // ----------------------------------------------------------------------
 // Product Management Services
@@ -124,6 +124,22 @@ export const updateProductInDB = async (productId, updatedData) => {
     } catch (error) {
         console.error("Error updating product:", error);
         return false;
+    }
+};
+
+/**
+ * Update only the stock field for a product document.
+ * @param {string} productId
+ * @param {number} newStock
+ */
+export const updateProductStock = async (productId, newStock) => {
+    try {
+        const productRef = doc(db, "products", productId);
+        await updateDoc(productRef, { stock: Number(newStock) });
+        return { success: true };
+    } catch (error) {
+        console.error("Error updating product stock:", error);
+        return { success: false, error: error.message };
     }
 };
 
@@ -286,15 +302,51 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
         if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
             return { success: false, error: "Order is already assigned." };
         }
-        
+        // Generate a 4-digit OTP for secure handover and save it on the order
+        const otp = String(Math.floor(1000 + Math.random() * 9000));
+
         await updateDoc(orderRef, {
-            status: "Out for Delivery",
+            status: "Out for Delivery 🚚",
             assignedTo: deliveryBoyId,
+            otp: otp,
+            otpVerified: false
         });
         return { success: true };
     } catch (error) {
         console.error("Error assigning order:", error);
         return { success: false, error: error.message || "Failed to process assignment." };
+    }
+};
+
+/**
+ * Verify a 4-digit OTP for an order and mark as delivered when valid.
+ */
+export const verifyOrderOTP = async (orderId, otpInput) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (!orderSnap.exists()) {
+            return { success: false, error: "Order not found." };
+        }
+        const data = orderSnap.data();
+        if (!data.otp) {
+            return { success: false, error: "No OTP set for this order." };
+        }
+        if (String(data.otp) !== String(otpInput)) {
+            return { success: false, error: "Invalid OTP provided." };
+        }
+
+        // Use the centralized status updater which also decrements stock for delivered orders
+        const updated = await updateOrderStatusInDB(orderId, "Delivered ✅");
+        if (updated) {
+            // clear OTP fields
+            await updateDoc(orderRef, { otpVerified: true, otp: null });
+            return { success: true };
+        }
+        return { success: false, error: "Failed to mark order delivered." };
+    } catch (error) {
+        console.error("OTP verification failed:", error);
+        return { success: false, error: error.message || "Verification failed." };
     }
 };
 
@@ -336,6 +388,32 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
 export const updateOrderStatusInDB = async (orderId, status) => {
     try {
         const orderRef = doc(db, "orders", orderId);
+        // If marking delivered, decrement stock for each ordered item atomically
+        if (String(status).toLowerCase().includes("deliver")) {
+            await runTransaction(db, async (transaction) => {
+                const orderSnap = await transaction.get(orderRef);
+                if (!orderSnap.exists()) throw new Error("Order not found");
+                const orderData = orderSnap.data();
+                const items = orderData.items || [];
+
+                // Update order status first
+                transaction.update(orderRef, { status });
+
+                // For each item, decrement stock on the product doc
+                for (const item of items) {
+                    if (!item.id) continue;
+                    const prodRef = doc(db, "products", String(item.id));
+                    const prodSnap = await transaction.get(prodRef);
+                    if (!prodSnap.exists()) continue;
+                    const currentStock = Number(prodSnap.data().stock || 0);
+                    const qty = Number(item.quantity || 1);
+                    const newStock = Math.max(0, currentStock - qty);
+                    transaction.update(prodRef, { stock: newStock });
+                }
+            });
+            return true;
+        }
+
         await updateDoc(orderRef, { status });
         return true;
     } catch (error) {

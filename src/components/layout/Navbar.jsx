@@ -62,6 +62,15 @@ const Navbar = () => {
                   Profile 👤
                 </NavLink>
 
+                <NavLink 
+                  to="/wallet" 
+                  className={({ isActive }) => isActive ? "text-emerald-400 drop-shadow-sm" : "text-gray-300 hover:text-emerald-300 transition-colors"}
+                >
+                  Wallet 💼
+                </NavLink>
+
+                {/* Wallet UI intentionally hidden from main nav — wallet page available at /wallet */}
+
                 {isAdminUser && (
                   <NavLink
                     to="/admin"
@@ -126,6 +135,7 @@ const Navbar = () => {
               <>
                 <NavLink to="/cart" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Cart 🛒</NavLink>
                 <NavLink to="/profile" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Profile 👤</NavLink>
+                <NavLink to="/wallet" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Wallet 💼</NavLink>
                 
                 {isAdminUser && (
                   <NavLink to="/admin" onClick={closeMenu} className="text-gray-300 hover:text-emerald-400 transition-colors">Admin Dashboard</NavLink>

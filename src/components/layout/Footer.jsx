@@ -58,7 +58,7 @@ const Footer = () => {
       {/* Copyright Section */}
       <div className="flex flex-col md:flex-row justify-between items-center mt-6 px-4">
         <p className="text-center text-white/40 text-xs">© 2026 ShopIndia. All rights reserved.</p>
-        <p className="text-center text-white/30 text-xs mt-2 md:mt-0">Version 1.4.1</p>
+        <p className="text-center text-white/30 text-xs mt-2 md:mt-0">Version 1.5.5</p>
       </div>
     </footer>
   );

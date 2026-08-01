@@ -14,13 +14,22 @@ export const registerUser = async (fullName, email, password) => {
         await updateProfile(user, {
             displayName: fullName
         });
-        
+        // Initialize wallet with ₹500 welcome credit and record the month
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const monthKey = `${year}-${month}`;
+
         await setDoc(doc(db, "users", user.uid), {
             uid: user.uid,
             fullName: fullName,
             email: email,
             role: "customer",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            wallet: {
+                balance: 500,
+                lastMonthlyCredit: monthKey
+            }
         });
         
         return { success: true, user }; 

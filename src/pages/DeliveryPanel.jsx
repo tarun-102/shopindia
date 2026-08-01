@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import GlassCard from "../components/ui/GlassCard";
-import { subscribeDeliveryOrders, updateOrderStatusInDB, assignOrderToDeliveryBoy } from "../services/productservices";
+import { subscribeDeliveryOrders, updateOrderStatusInDB, assignOrderToDeliveryBoy, verifyOrderOTP } from "../services/productservices";
+import toast from 'react-hot-toast';
+import Modal from '../components/ui/Modal';
 
 const DeliveryPanel = () => {
   // ---------------------------------------------------------------------------
@@ -15,9 +17,7 @@ const DeliveryPanel = () => {
   // Tab state: 'available' for incoming/active orders, 'history' for completed
   const [activeTab, setActiveTab] = useState("available"); 
   
-  // Action notifications
-  const [actionMessage, setActionMessage] = useState("");
-  const [actionError, setActionError] = useState("");
+  // Action notifications are shown via react-hot-toast
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,16 +74,11 @@ const DeliveryPanel = () => {
    */
   const handleAcceptOrder = async (orderId) => {
     if (!user?.uid) return;
-    setActionMessage("");
-    setActionError("");
-
     const result = await assignOrderToDeliveryBoy(orderId, user.uid);
     if (result.success) {
-      // 🔥 Automatically update status to "Out for Delivery 🚚" when accepted
-      await updateOrderStatusInDB(orderId, "Out for Delivery 🚚");
-      setActionMessage("Order accepted successfully! Status changed to Out for Delivery.");
+      toast.success("Order accepted and marked Out for Delivery.");
     } else {
-      setActionError(result.error || "Assignment failed. Please try again.");
+      toast.error(result.error || "Assignment failed. Please try again.");
     }
   };
 
@@ -91,13 +86,25 @@ const DeliveryPanel = () => {
    * Updates the order status to delivered upon successful handover.
    */
   const handleMarkDelivered = async (orderId) => {
-    setActionMessage("");
-    setActionError("");
-    const success = await updateOrderStatusInDB(orderId, "Delivered ✅");
-    if (success) {
-      setActionMessage("Order status successfully updated to Delivered.");
+    // Open OTP modal for this order
+    setOtpModal({ show: true, orderId, otp: "" });
+  };
+
+  const [otpModal, setOtpModal] = useState({ show: false, orderId: null, otp: "" });
+
+  const submitOtp = async () => {
+    if (!otpModal.orderId) return;
+    if (!otpModal.otp || otpModal.otp.trim().length !== 4) {
+      toast.error("Please enter a valid 4-digit OTP.");
+      return;
+    }
+
+    const result = await verifyOrderOTP(otpModal.orderId, otpModal.otp.trim());
+    if (result.success) {
+      toast.success("OTP verified — order marked as Delivered.");
+      setOtpModal({ show: false, orderId: null, otp: "" });
     } else {
-      setActionError("Failed to update order status. Please verify your connection.");
+      toast.error(result.error || "OTP verification failed. Delivery not completed.");
     }
   };
 
@@ -187,17 +194,7 @@ const DeliveryPanel = () => {
       ) : (
         <div className="animate-fade-in space-y-6">
           
-          {/* Action Notifications */}
-          {(actionMessage || actionError) && (
-            <div className={`rounded-2xl p-4 flex items-center gap-3 border backdrop-blur-md shadow-lg ${
-              actionError 
-                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' 
-                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-            }`}>
-              <span className="text-xl">{actionError ? '⚠️' : '✅'}</span>
-              <p className="font-semibold text-sm">{actionError || actionMessage}</p>
-            </div>
-          )}
+          {/* Notifications use react-hot-toast */}
 
           {/* Orders Grid */}
           {filteredOrders.length === 0 ? (
@@ -332,6 +329,18 @@ const DeliveryPanel = () => {
           )}
         </div>
       )}
+      <Modal show={otpModal.show} title="Enter Delivery OTP" onClose={() => setOtpModal({ show: false, orderId: null, otp: "" })}>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-400">4-digit OTP</label>
+            <input type="text" maxLength={4} value={otpModal.otp} onChange={(e) => setOtpModal(s => ({ ...s, otp: e.target.value.replace(/\D/g, '') }))} className="w-full mt-2 px-4 py-3 rounded-xl bg-black/30 border border-gray-700 text-white outline-none" />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => setOtpModal({ show: false, orderId: null, otp: "" })} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white">Cancel</button>
+            <button onClick={submitOtp} className="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold">Verify & Deliver</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
