@@ -2,11 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-gradient-dark: radial-gradient(circle at top, rgba(250,204,21,0.12), transparent 25%), linear-gradient(135deg, #020617, #3b0764, #020617);
+  --bg-gradient-light: radial-gradient(circle at top, rgba(16,185,129,0.06), transparent 25%), linear-gradient(135deg, #f8fafc, #eef2ff, #fff);
+  --text-dark: #e6eef8;
+  --text-light: #0f172a;
+}
+
 body {
   min-height: 100vh;
-  background: radial-gradient(circle at top, rgba(250,204,21,0.18), transparent 25%), linear-gradient(135deg, #020617, #3b0764, #020617);
   background-attachment: fixed;
-  color: white;
+  transition: background 250ms ease, color 200ms ease;
+  background: var(--bg-gradient-dark);
+  color: var(--text-dark);
+}
+
+/* Light theme */
+:root:not(.dark) body,
+html:not(.dark) body {
+  background: var(--bg-gradient-light);
+  color: var(--text-light);
+}
+
+/* Dark theme (when .dark class present on html) */
+html.dark body {
+  background: var(--bg-gradient-dark);
+  color: var(--text-dark);
 }
 
 ::selection {

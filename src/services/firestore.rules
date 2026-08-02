@@ -4,8 +4,18 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow write: if request.auth != null && (
+        // Admins can fully write product documents
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        // Delivery partners may ONLY decrement stock (and nothing else) as part of delivery finalization
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
+          // Ensure only 'stock' is being updated
+          request.resource.data.keys().hasOnly(['stock']) &&
+          // New stock must be less-than-or-equal to existing stock (decrement)
+          request.resource.data.stock <= resource.data.stock
+        )
+      );
     }
 
     match /cart/{cartId} {
@@ -19,36 +29,52 @@ service cloud.firestore {
 
       allow read: if request.auth != null
         && (
+          // User can read their own orders
           request.auth.uid == resource.data.userId ||
+          // Admin can read all orders
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          // Delivery partners may read orders that are pending/assigning/confirmed/out-for-delivery or orders assigned to them
           (
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
-            (
-              resource.data.status == 'Order Confirmed 🟢' ||
-              resource.data.status == 'Out for Delivery 🚚' ||
-              resource.data.assignedTo == request.auth.uid
+              (
+              resource.data.assignedTo == request.auth.uid ||
+              // Support both plain and emoji variants of statuses
+              resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚']
             )
           )
         );
 
       allow update: if request.auth != null
         && (
+          // Admin can update any order
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
           (
+            // Delivery partner may perform specific status transitions on orders
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
             (
+              // Accept an unassigned or pending/assigning order: set status -> 'Out for Delivery 🚚' and assign to self
               (
-                (
-                  resource.data.status == 'Order Confirmed 🟢' ||
-                  resource.data.status == 'Out for Delivery 🚚'
-                ) &&
-                request.resource.data.status == 'Delivery Requested 🚚' &&
+                // Accept both plain and emoji pending variants
+                resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡'] &&
+                request.resource.data.status == 'Out for Delivery 🚚' &&
                 request.resource.data.assignedTo == request.auth.uid
               ) ||
+              // Mark an assigned order as delivered (allow delivery partner to confirm delivery
+              // even if status string variants differ). Require assignment and that the
+              // request sets status -> 'Delivered ✅' and keeps assignment to self.
               (
-                resource.data.status == 'Delivery Requested 🚚' &&
-                request.resource.data.status == 'Delivered ✅' &&
-                request.resource.data.assignedTo == request.auth.uid
+                resource.data.assignedTo == request.auth.uid &&
+                request.resource.data.assignedTo == request.auth.uid &&
+                request.resource.data.status == 'Delivered ✅'
+              )
+              ||
+              // Allow assigned delivery partner to regenerate OTP or set otpVerified flag
+              (
+                // Allow OTP updates when order is out for delivery (support emoji and plain variants)
+                resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
+                resource.data.assignedTo == request.auth.uid &&
+                // Only allow updating otp and otpVerified fields
+                request.resource.data.keys().hasOnly(['otp','otpVerified'])
               )
             )
           )
@@ -59,7 +85,11 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Users can read/write their own document. Admins can read/write any user document
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
   }
 }

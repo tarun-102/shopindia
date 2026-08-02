@@ -91,8 +91,8 @@ const Layout = () => {
     }, [cart, user, isCartLoading]);
 
     return (
-       
-        <div className="min-h-screen flex flex-col bg-[#0a0f16] text-gray-100 font-sans selection:bg-emerald-500/30">
+        // FIX: Added light mode classes (bg-gray-50 text-gray-900) and dark mode classes (dark:bg-[#0a0f16] dark:text-gray-100)
+        <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-[#0a0f16] text-gray-900 dark:text-gray-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-900 dark:selection:text-emerald-100 transition-colors duration-500">
             
             <Navbar />
 

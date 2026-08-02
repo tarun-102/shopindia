@@ -67,6 +67,23 @@ export const logoutUser = async () => {
     }
 }
 
+/**
+ * Sets the current signed-in user's role. This is allowed by current Firestore rules
+ * (users can write their own doc). Use only for testing/dev — in production roles
+ * should be granted via a secure admin workflow.
+ */
+export const setMyRole = async (role) => {
+    try {
+        const user = auth.currentUser;
+        if (!user) return { success: false, error: 'Not authenticated' };
+        await setDoc(doc(db, 'users', user.uid), { role }, { merge: true });
+        return { success: true };
+    } catch (err) {
+        console.error('setMyRole error:', err);
+        return { success: false, error: err.message };
+    }
+};
+
 // ----------------------------------------------------------------------
 // User Management Services (Admin)
 // ----------------------------------------------------------------------

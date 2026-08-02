@@ -47,16 +47,11 @@ export const getAllProducts = async () => {
     }
 };
 
-/**
- * Calculates and fetches the top selling products based on actual order history.
- * Scans the orders collection, counts item frequencies, and retrieves product details.
- */
 export const getTopSellingProducts = async () => {
     try {
         const ordersSnapshot = await getDocs(collection(db, "orders"));
         const salesFrequency = {};
 
-        // Aggregate purchased quantities per product ID
         ordersSnapshot.forEach((docItem) => {
             const orderData = docItem.data();
             if (orderData.items && Array.isArray(orderData.items)) {
@@ -68,10 +63,9 @@ export const getTopSellingProducts = async () => {
             }
         });
 
-        // Sort product IDs by highest sales frequency
         const sortedProductIds = Object.keys(salesFrequency)
             .sort((a, b) => salesFrequency[b] - salesFrequency[a])
-            .slice(0, 4); // Fetch top 4
+            .slice(0, 4); 
 
         const topProducts = [];
         for (const id of sortedProductIds) {
@@ -84,6 +78,9 @@ export const getTopSellingProducts = async () => {
 
         return topProducts;
     } catch (error) {
+        if (error && error.code === 'permission-denied') {
+            return [];
+        }
         console.error("Failed to calculate top selling products:", error);
         return [];
     }
@@ -127,11 +124,6 @@ export const updateProductInDB = async (productId, updatedData) => {
     }
 };
 
-/**
- * Update only the stock field for a product document.
- * @param {string} productId
- * @param {number} newStock
- */
 export const updateProductStock = async (productId, newStock) => {
     try {
         const productRef = doc(db, "products", productId);
@@ -184,6 +176,7 @@ export const placeOrderInDB = async (orderData) => {
         const finalOrderData = {
             ...orderData,
             status: "Pending", 
+            assignedTo: null, 
             date: orderData.date || new Date().toISOString()
         };
         const docRef = await addDoc(collection(db, "orders"), finalOrderData);
@@ -212,10 +205,6 @@ export const getUserOrders = async (userId) => {
 };
 
 export const getAllOrders = async (userId) => {
-    if (!userId) {
-        throw new Error("Authentication required for admin order fetch.");
-    }
-
     try {
         const querySnapshot = await getDocs(collection(db, "orders"));
         const orders = [];
@@ -230,7 +219,7 @@ export const getAllOrders = async (userId) => {
         });
     } catch (error) {
         console.error("Error fetching all orders:", error);
-        throw error;
+        return [];
     }
 };
 
@@ -240,12 +229,26 @@ export const getDeliveryOrders = async (deliveryBoyId) => {
     }
 
     try {
-        const querySnapshot = await getDocs(collection(db, "orders"));
-        const orders = [];
-        querySnapshot.forEach((docItem) => {
-            const data = docItem.data();
-            orders.push({ id: docItem.id, ...data });
+        const allowedStatuses = ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚'];
+        
+        const qStatuses = query(collection(db, "orders"), where("status", "in", allowedStatuses));
+        const qAssigned = query(collection(db, "orders"), where("assignedTo", "==", deliveryBoyId));
+
+        const [statusSnap, assignedSnap] = await Promise.all([
+            getDocs(qStatuses),
+            getDocs(qAssigned)
+        ]);
+
+        const combined = {};
+        
+        statusSnap.forEach((docItem) => {
+            combined[docItem.id] = { id: docItem.id, ...docItem.data() };
         });
+        assignedSnap.forEach((docItem) => {
+            combined[docItem.id] = { id: docItem.id, ...docItem.data() };
+        });
+
+        const orders = Object.values(combined);
 
         return orders.sort((a, b) => {
             const aTime = new Date(a.date).getTime();
@@ -264,37 +267,66 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
         throw new Error("Delivery personnel ID required for subscription.");
     }
 
-    const unsubscribe = onSnapshot(
-        collection(db, "orders"),
+    const allowedStatuses = ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚'];
+
+    const qStatuses = query(collection(db, "orders"), where("status", "in", allowedStatuses));
+    const qAssigned = query(collection(db, "orders"), where("assignedTo", "==", deliveryBoyId));
+
+    const snapResults = { statuses: [], assigned: [] };
+
+    const processAndEmit = () => {
+        const combined = {};
+        for (const item of [...snapResults.statuses, ...snapResults.assigned]) {
+            combined[item.id] = item;
+        }
+        const ordersList = Object.values(combined);
+        ordersList.sort((a, b) => {
+            const aTime = new Date(a.date).getTime();
+            const bTime = new Date(b.date).getTime();
+            if (isNaN(aTime) || isNaN(bTime)) return 0;
+            return bTime - aTime;
+        });
+        onUpdate(ordersList);
+    };
+
+    const unsub1 = onSnapshot(
+        qStatuses,
         (snapshot) => {
-            const ordersList = [];
-            snapshot.forEach((docItem) => {
-                ordersList.push({ id: docItem.id, ...docItem.data() });
-            });
-
-            ordersList.sort((a, b) => {
-                const aTime = new Date(a.date).getTime();
-                const bTime = new Date(b.date).getTime();
-                if (isNaN(aTime) || isNaN(bTime)) return 0;
-                return bTime - aTime;
-            });
-
-            onUpdate(ordersList);
+            const list = [];
+            snapshot.forEach((docItem) => list.push({ id: docItem.id, ...docItem.data() }));
+            snapResults.statuses = list;
+            processAndEmit();
         },
         (error) => {
-            console.error("Order subscription failed:", error);
+            console.error("Order subscription (statuses) failed:", error);
             if (onError) onError(error);
         }
     );
 
-    return () => unsubscribe();
+    const unsub2 = onSnapshot(
+        qAssigned,
+        (snapshot) => {
+            const list = [];
+            snapshot.forEach((docItem) => list.push({ id: docItem.id, ...docItem.data() }));
+            snapResults.assigned = list;
+            processAndEmit();
+        },
+        (error) => {
+            console.error("Order subscription (assigned) failed:", error);
+            if (onError) onError(error);
+        }
+    );
+
+    return () => {
+        try { unsub1(); } catch (e) {}
+        try { unsub2(); } catch (e) {}
+    };
 };
 
 export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
 
-        // Use a transaction to prevent concurrent assignments (race conditions).
         const otp = String(Math.floor(1000 + Math.random() * 9000));
 
         await runTransaction(db, async (transaction) => {
@@ -307,8 +339,16 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
             if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
                 throw new Error("Order is already assigned.");
             }
+            
+            // FIX: Exact string match instead of .includes('deliver')
+            const statusLower = String(orderData.status || '').toLowerCase();
+            if (statusLower.includes('cancel')) {
+                throw new Error('Order has been cancelled.');
+            }
+            if (orderData.status === 'Delivered ✅' || orderData.status === 'Delivered') {
+                throw new Error('Order already delivered.');
+            }
 
-            // Commit the assignment atomically
             transaction.update(orderRef, {
                 status: "Out for Delivery 🚚",
                 assignedTo: deliveryBoyId,
@@ -324,9 +364,6 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     }
 };
 
-/**
- * Verify a 4-digit OTP for an order and mark as delivered when valid.
- */
 export const verifyOrderOTP = async (orderId, otpInput) => {
     try {
         const orderRef = doc(db, "orders", orderId);
@@ -342,10 +379,8 @@ export const verifyOrderOTP = async (orderId, otpInput) => {
             return { success: false, error: "Invalid OTP provided." };
         }
 
-        // Use the centralized status updater which also decrements stock for delivered orders
         const updated = await updateOrderStatusInDB(orderId, "Delivered ✅");
         if (updated) {
-            // clear OTP fields
             await updateDoc(orderRef, { otpVerified: true, otp: null });
             return { success: true };
         }
@@ -394,23 +429,28 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
 export const updateOrderStatusInDB = async (orderId, status) => {
     try {
         const orderRef = doc(db, "orders", orderId);
-        // If marking delivered, decrement stock for each ordered item atomically
-        if (String(status).toLowerCase().includes("deliver")) {
+        
+        // FIX: Replaced .includes('deliver') with exact match to stop it from running on "Assigning Delivery Partner 🟡"
+        if (status === "Delivered ✅" || status === "Delivered") {
             await runTransaction(db, async (transaction) => {
                 const orderSnap = await transaction.get(orderRef);
                 if (!orderSnap.exists()) throw new Error("Order not found");
                 const orderData = orderSnap.data();
                 const items = orderData.items || [];
 
-                // Update order status first
-                transaction.update(orderRef, { status });
+                const prodRefs = items.map((item) => doc(db, "products", String(item.id))).filter(Boolean);
+                const prodSnaps = [];
+                for (const ref of prodRefs) {
+                    prodSnaps.push(await transaction.get(ref));
+                }
 
-                // For each item, decrement stock on the product doc
-                for (const item of items) {
-                    if (!item.id) continue;
-                    const prodRef = doc(db, "products", String(item.id));
-                    const prodSnap = await transaction.get(prodRef);
-                    if (!prodSnap.exists()) continue;
+                transaction.update(orderRef, { status, otpVerified: true, otp: null });
+
+                for (let i = 0; i < prodRefs.length; i++) {
+                    const item = items[i];
+                    const prodRef = prodRefs[i];
+                    const prodSnap = prodSnaps[i];
+                    if (!item || !item.id || !prodSnap.exists()) continue;
                     const currentStock = Number(prodSnap.data().stock || 0);
                     const qty = Number(item.quantity || 1);
                     const newStock = Math.max(0, currentStock - qty);
@@ -435,5 +475,32 @@ export const deleteOrderFromDB = async (orderId) => {
     } catch (error) {
         console.error("Error deleting order:", error);
         return false;
+    }
+};
+
+export const regenerateOrderOTP = async (orderId, deliveryBoyId) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const newOtp = String(Math.floor(1000 + Math.random() * 9000));
+
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) throw new Error('Order not found');
+            const orderData = orderSnap.data() || {};
+            const status = String(orderData.status || '').toLowerCase();
+            if (!String(orderData.assignedTo).length || orderData.assignedTo !== deliveryBoyId) {
+                throw new Error('Not assigned to this delivery partner');
+            }
+            if (!status.includes('out for delivery')) {
+                throw new Error('Can regenerate OTP only for orders Out for Delivery');
+            }
+
+            transaction.update(orderRef, { otp: newOtp, otpVerified: false });
+        });
+
+        return { success: true, otp: newOtp };
+    } catch (error) {
+        console.error('Error regenerating OTP:', error);
+        return { success: false, error: error.message || 'Failed to regenerate OTP' };
     }
 };

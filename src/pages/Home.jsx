@@ -3,35 +3,23 @@ import { useLoaderData } from "react-router-dom";
 import ProductCard from "../components/ui/ProductCard";
 import CategoryCard from "../components/ui/CategoryCard";
 import { category } from "../utils/categories"; 
-import { getTopSellingProducts } from "../services/productservices"; // Imported real top-selling function
+import { getTopSellingProducts } from "../services/productservices"; 
 
 const Home = () => {
   const products = useLoaderData();
   
-  // ---------------------------------------------------------------------------
-  // Component States
-  // ---------------------------------------------------------------------------
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  
-  // Real Top Products State
   const [topProducts, setTopProducts] = useState([]);
   const [isLoadingTopProducts, setIsLoadingTopProducts] = useState(true);
   
-  // ---------------------------------------------------------------------------
-  // Data Fetching & Slicing Logic
-  // ---------------------------------------------------------------------------
-  
-  const inStockProducts = products.filter((product) => Number(product.stock || 0) > 0);
   const displayedCategories = showAllCategories ? category : category.slice(0, 5);
 
-  // Fetch real top selling products based on actual order history
   useEffect(() => {
     const fetchTopSellers = async () => {
       setIsLoadingTopProducts(true);
       const realTopSellers = await getTopSellingProducts();
       
-      // Fallback to all products if no top sellers exist
       if (realTopSellers && realTopSellers.length > 0) {
         setTopProducts(realTopSellers.slice(0, 4));
       } else {
@@ -39,11 +27,9 @@ const Home = () => {
       }
       setIsLoadingTopProducts(false);
     };
-
     fetchTopSellers();
   }, [products]);
 
-  // Pagination configuration for All Products
   const productsPerPage = 8; 
   const totalPages = Math.max(1, Math.ceil(products.length / productsPerPage));
   const paginatedProducts = products.slice(
@@ -51,7 +37,6 @@ const Home = () => {
     currentPage * productsPerPage
   );
 
-  // Scroll handler for pagination
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
     const productsSection = document.getElementById("all-products-section");
@@ -61,41 +46,36 @@ const Home = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-16 min-h-screen">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-12 md:space-y-16 min-h-screen transition-colors duration-500">
 
-      {/* ----------------------------------------------------------------------
-          Hero Section
-      ---------------------------------------------------------------------- */}
-      <section className="bg-gradient-to-r from-emerald-500/10 via-[#0a0f16] to-teal-500/10 rounded-[2.5rem] p-12 text-center shadow-[0_20px_60px_rgba(16,185,129,0.05)] border border-emerald-500/20 backdrop-blur-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-emerald-500/20 blur-[100px] pointer-events-none"></div>
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-900/40 dark:via-[#0a0f16] dark:to-teal-900/40 rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-12 text-center shadow-lg dark:shadow-[0_10px_40px_rgba(16,185,129,0.05)] border border-gray-200/80 dark:border-emerald-500/10 backdrop-blur-2xl relative overflow-hidden transition-colors duration-500">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-emerald-500/10 dark:bg-emerald-500/20 blur-[80px] pointer-events-none"></div>
         
-        <h1 className="text-4xl md:text-6xl font-black mb-6 bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent drop-shadow-sm relative z-10">
+        <h1 className="text-2xl sm:text-3xl md:text-6xl font-black mb-3 md:mb-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-300 dark:to-cyan-400 bg-clip-text text-transparent drop-shadow-sm relative z-10 leading-tight">
           Welcome to ShopIndia
         </h1>
-        <p className="text-gray-300 font-medium tracking-wide max-w-2xl mx-auto text-lg relative z-10">
+        <p className="text-gray-600 dark:text-gray-400 font-medium tracking-wide max-w-2xl mx-auto text-xs md:text-lg relative z-10 px-2 leading-relaxed">
           Best deals • Fast delivery • Trusted service
-          <br className="hidden md:block" /> 
-          Shop from anywhere with absolute confidence.
+          <span className="block mt-1 text-emerald-600 dark:text-emerald-400/80">Shop from anywhere with absolute confidence.</span>
         </p>
       </section>
 
-      {/* ----------------------------------------------------------------------
-          Top Selling Section (Real Data Integrated)
-      ---------------------------------------------------------------------- */}
+      {/* Top Selling Section */}
       <section>
-        <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
-          <span className="text-3xl">🔥</span>
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-widest">
-            Top Selling Products
+        <div className="flex items-center gap-3 mb-6 md:mb-8 border-b border-gray-200 dark:border-white/5 pb-4 transition-colors">
+          <span className="text-2xl md:text-3xl">🔥</span>
+          <h2 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-widest">
+            Top Selling
           </h2>
         </div>
         
         {isLoadingTopProducts ? (
           <div className="flex justify-center items-center py-10">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-500/20 border-t-emerald-400"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 dark:border-emerald-500/20 border-t-emerald-600 dark:border-t-emerald-400"></div>
           </div>
         ) : topProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-6">
             {topProducts.map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}
@@ -103,54 +83,50 @@ const Home = () => {
         ) : null}
       </section>
 
-      {/* ----------------------------------------------------------------------
-          Categories Section
-      ---------------------------------------------------------------------- */}
+      {/* Categories Section */}
       <section>
-        <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
-          <span className="text-3xl">📂</span>
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-widest">
+        <div className="flex items-center gap-3 mb-6 md:mb-8 border-b border-gray-200 dark:border-white/5 pb-4 transition-colors">
+          <span className="text-2xl md:text-3xl">📂</span>
+          <h2 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-widest">
             Shop By Category
           </h2>
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-6 transition-all duration-500">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-6 transition-all duration-500">
           {displayedCategories.map((cat) => (
             <CategoryCard key={cat.id} category={cat} />
           ))}
         </div>
 
         {category.length > 5 && (
-          <div className="flex justify-center mt-10">
+          <div className="flex justify-center mt-8 md:mt-10">
             <button 
               onClick={() => setShowAllCategories(!showAllCategories)}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-400 hover:text-emerald-300 font-bold py-3 px-8 rounded-xl transition-all shadow-lg flex items-center gap-3"
+              className="bg-white dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-bold py-3 px-6 md:px-8 rounded-xl transition-all shadow-sm dark:shadow-lg flex items-center gap-2 md:gap-3 text-sm md:text-base"
             >
               <span>{showAllCategories ? "Show Less" : "See All Categories"}</span>
-              <span className="text-xl">{showAllCategories ? "↑" : "↓"}</span>
+              <span className="text-lg md:text-xl">{showAllCategories ? "↑" : "↓"}</span>
             </button>
           </div>
         )}
       </section>
 
-      {/* ----------------------------------------------------------------------
-          All Products Section (Paginated)
-      ---------------------------------------------------------------------- */}
+      {/* All Products Section */}
       <section id="all-products-section" className="scroll-mt-24">
-        <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
-          <span className="text-3xl">🛍️</span>
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-widest">
+        <div className="flex items-center gap-3 mb-6 md:mb-8 border-b border-gray-200 dark:border-white/5 pb-4 transition-colors">
+          <span className="text-2xl md:text-3xl">🛍️</span>
+          <h2 className="text-xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-widest">
             All Products
           </h2>
         </div>
         
         {products.length === 0 ? (
-          <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-            <p className="text-gray-400 font-medium">No products currently available in the store.</p>
+          <div className="text-center py-20 bg-gray-50 dark:bg-white/5 rounded-3xl border border-gray-200 dark:border-white/10 mx-4 md:mx-0 transition-colors">
+            <p className="text-gray-500 dark:text-gray-400 font-medium">No products currently available in the store.</p>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
               {paginatedProducts.map((item) => (
                 <ProductCard key={item.id} product={item} />
               ))}
@@ -158,24 +134,24 @@ const Home = () => {
 
             {/* Pagination Controls */}
             {products.length > productsPerPage && (
-              <div className="flex flex-col sm:flex-row items-center justify-between mt-12 px-6 py-4 bg-white/5 rounded-2xl border border-white/10 gap-4">
-                <span className="text-sm text-gray-400 font-medium">
-                  Page <span className="text-emerald-400">{currentPage}</span> of {totalPages} 
-                  <span className="ml-2 hidden sm:inline-block">({products.length} Items Total)</span>
+              <div className="flex flex-col sm:flex-row items-center justify-between mt-8 md:mt-12 px-4 md:px-6 py-4 bg-white dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 gap-4 shadow-sm dark:shadow-none transition-colors">
+                <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                  Page <span className="text-emerald-600 dark:text-emerald-400 font-bold">{currentPage}</span> of {totalPages} 
+                  <span className="ml-2 inline-block">({products.length} Total)</span>
                 </span>
                 
-                <div className="flex gap-3 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
                     disabled={currentPage === 1}
-                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all font-bold text-sm"
+                    className="flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-50 dark:hover:bg-emerald-500/20 hover:border-emerald-200 dark:hover:border-emerald-500/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all font-bold text-xs md:text-sm shadow-sm"
                   >
-                    Previous
+                    Prev
                   </button>
                   <button
                     onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all font-bold text-sm"
+                    className="flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-50 dark:hover:bg-emerald-500/20 hover:border-emerald-200 dark:hover:border-emerald-500/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all font-bold text-xs md:text-sm shadow-sm"
                   >
                     Next
                   </button>
@@ -185,7 +161,6 @@ const Home = () => {
           </>
         )}
       </section>
-
     </div>
   );
 };
