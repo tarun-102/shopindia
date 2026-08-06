@@ -61,7 +61,7 @@ const Footer = () => {
       <div className="flex flex-col md:flex-row justify-between items-center mt-6 px-4 gap-3">
         <div className="flex items-center gap-4">
           <p className="text-center text-gray-500 dark:text-white/40 text-xs font-medium transition-colors">© 2026 ShopIndia. All rights reserved.</p>
-          <p className="text-center text-gray-400 dark:text-white/30 text-xs font-medium transition-colors">Version 1.5.5</p>
+          <p className="text-center text-gray-400 dark:text-white/30 text-xs font-medium transition-colors">Version 1.5.6</p>
         </div>
         <div className="flex items-center gap-3">
           <button

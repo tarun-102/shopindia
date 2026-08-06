@@ -4,6 +4,7 @@ import ProductCard from "../components/ui/ProductCard";
 import CategoryCard from "../components/ui/CategoryCard";
 import { category } from "../utils/categories"; 
 import { getTopSellingProducts } from "../services/productservices"; 
+import HeroSlider from "../components/ui/HeroSlider";
 
 const Home = () => {
   const products = useLoaderData();
@@ -49,17 +50,7 @@ const Home = () => {
     <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-12 md:space-y-16 min-h-screen transition-colors duration-500">
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-900/40 dark:via-[#0a0f16] dark:to-teal-900/40 rounded-[1.5rem] md:rounded-[2.5rem] p-6 md:p-12 text-center shadow-lg dark:shadow-[0_10px_40px_rgba(16,185,129,0.05)] border border-gray-200/80 dark:border-emerald-500/10 backdrop-blur-2xl relative overflow-hidden transition-colors duration-500">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-lg bg-emerald-500/10 dark:bg-emerald-500/20 blur-[80px] pointer-events-none"></div>
-        
-        <h1 className="text-2xl sm:text-3xl md:text-6xl font-black mb-3 md:mb-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-400 dark:via-teal-300 dark:to-cyan-400 bg-clip-text text-transparent drop-shadow-sm relative z-10 leading-tight">
-          Welcome to ShopIndia
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 font-medium tracking-wide max-w-2xl mx-auto text-xs md:text-lg relative z-10 px-2 leading-relaxed">
-          Best deals • Fast delivery • Trusted service
-          <span className="block mt-1 text-emerald-600 dark:text-emerald-400/80">Shop from anywhere with absolute confidence.</span>
-        </p>
-      </section>
+      <HeroSlider />
 
       {/* Top Selling Section */}
       <section>
