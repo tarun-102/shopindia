@@ -97,7 +97,7 @@ const Layout = () => {
             <Navbar />
 
             {/* Added flex-grow so footer stays at bottom, and made container responsive */}
-            <main className="flex-grow w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 transition-all duration-300">
+            <main className="flex-grow w-full max-w-screen-2xl mx-auto px-3 sm:px-6 lg:px-8 pt-5 md:pt-8 pb-24 md:pb-12 transition-all duration-300">
                 <Outlet />
             </main>
             

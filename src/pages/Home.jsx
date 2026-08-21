@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"; 
-import { useLoaderData } from "react-router-dom";
+import { useLoaderData, useSearchParams } from "react-router-dom";
 import ProductCard from "../components/ui/ProductCard";
 import CategoryCard from "../components/ui/CategoryCard";
 import { category } from "../utils/categories"; 
@@ -8,6 +8,11 @@ import HeroSlider from "../components/ui/HeroSlider";
 
 const Home = () => {
   const products = useLoaderData();
+  const [searchParams] = useSearchParams();
+  const searchQuery = searchParams.get("search")?.trim().toLowerCase() || "";
+  const visibleProducts = searchQuery
+    ? products.filter((product) => `${product.title} ${product.category}`.toLowerCase().includes(searchQuery))
+    : products;
   
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,10 +37,11 @@ const Home = () => {
   }, [products]);
 
   const productsPerPage = 8; 
-  const totalPages = Math.max(1, Math.ceil(products.length / productsPerPage));
-  const paginatedProducts = products.slice(
-    (currentPage - 1) * productsPerPage, 
-    currentPage * productsPerPage
+  const totalPages = Math.max(1, Math.ceil(visibleProducts.length / productsPerPage));
+  const displayedPage = Math.min(currentPage, totalPages);
+  const paginatedProducts = visibleProducts.slice(
+    (displayedPage - 1) * productsPerPage, 
+    displayedPage * productsPerPage
   );
 
   const handlePageChange = (newPage) => {
@@ -47,7 +53,7 @@ const Home = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-12 md:space-y-16 min-h-screen transition-colors duration-500">
+    <div className="max-w-7xl mx-auto p-1 md:p-8 space-y-8 md:space-y-16 min-h-screen transition-colors duration-500">
 
       {/* Hero Section */}
       <HeroSlider />
@@ -83,7 +89,7 @@ const Home = () => {
           </h2>
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-6 transition-all duration-500">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 md:gap-6 transition-all duration-500">
           {displayedCategories.map((cat) => (
             <CategoryCard key={cat.id} category={cat} />
           ))}
@@ -111,7 +117,7 @@ const Home = () => {
           </h2>
         </div>
         
-        {products.length === 0 ? (
+        {visibleProducts.length === 0 ? (
           <div className="text-center py-20 bg-gray-50 dark:bg-white/5 rounded-3xl border border-gray-200 dark:border-white/10 mx-4 md:mx-0 transition-colors">
             <p className="text-gray-500 dark:text-gray-400 font-medium">No products currently available in the store.</p>
           </div>
@@ -124,24 +130,24 @@ const Home = () => {
             </div>
 
             {/* Pagination Controls */}
-            {products.length > productsPerPage && (
+            {visibleProducts.length > productsPerPage && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-8 md:mt-12 px-4 md:px-6 py-4 bg-white dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 gap-4 shadow-sm dark:shadow-none transition-colors">
                 <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                  Page <span className="text-emerald-600 dark:text-emerald-400 font-bold">{currentPage}</span> of {totalPages} 
-                  <span className="ml-2 inline-block">({products.length} Total)</span>
+                  Page <span className="text-emerald-600 dark:text-emerald-400 font-bold">{displayedPage}</span> of {totalPages} 
+                  <span className="ml-2 inline-block">({visibleProducts.length} Total)</span>
                 </span>
                 
                 <div className="flex gap-2 w-full sm:w-auto">
                   <button
-                    onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(Math.max(displayedPage - 1, 1))}
+                    disabled={displayedPage === 1}
                     className="flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-50 dark:hover:bg-emerald-500/20 hover:border-emerald-200 dark:hover:border-emerald-500/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all font-bold text-xs md:text-sm shadow-sm"
                   >
                     Prev
                   </button>
                   <button
-                    onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => handlePageChange(Math.min(displayedPage + 1, totalPages))}
+                    disabled={displayedPage === totalPages}
                     className="flex-1 sm:flex-none px-4 md:px-6 py-2 md:py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-50 dark:hover:bg-emerald-500/20 hover:border-emerald-200 dark:hover:border-emerald-500/30 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all font-bold text-xs md:text-sm shadow-sm"
                   >
                     Next

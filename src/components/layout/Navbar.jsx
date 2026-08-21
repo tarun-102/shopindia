@@ -1,17 +1,18 @@
-import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { logoutUser } from "../../services/auth/authService";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUserRedux } from "../../store/slices/authSlice"; 
 import useTheme from "../../hooks/useTheme";
+import { Home as HomeIcon, ShoppingCart, UserRound, WalletCards, Search } from "lucide-react";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch(); 
+  const [searchQuery, setSearchQuery] = useState("");
 
   const user = useSelector((state) => state.auth.user);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+  const cartQuantity = useSelector((state) => state.cart.totalQuantity);
   const isAdminUser = user?.role === "admin";
   const isDeliveryBoy = user?.role === "deliveryboy";
   const { theme, toggleTheme } = useTheme();
@@ -21,22 +22,19 @@ const Navbar = () => {
     if (result.success) {
       dispatch(logoutUserRedux());
     }
-    setIsMenuOpen(false);
     navigate("/login");
   };
 
-  const closeMenu = () => setIsMenuOpen(false); 
-
   return(
-    <div className="px-4 pt-4 md:pt-6 relative z-50 transition-all duration-500">
+    <div className="px-3 pt-3 md:px-4 md:pt-6 relative z-50 transition-all duration-500">
         
         {/* PREMIUM MAIN NAVBAR CARD */}
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center bg-white/70 dark:bg-[#0a0f16]/70 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] rounded-[2rem] transition-all duration-500">
+        <div className="max-w-7xl mx-auto px-4 py-3 md:px-6 md:py-4 flex justify-between items-center bg-white/80 dark:bg-[#0a0f16]/80 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] rounded-2xl md:rounded-[2rem] transition-all duration-500">
           
           {/* Logo */}
           <h1 
             onClick={() => navigate("/")} 
-            className="text-2xl font-black tracking-widest cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-600 dark:from-emerald-400 dark:to-teal-500 bg-clip-text text-transparent uppercase drop-shadow-sm hover:scale-105 transition-transform duration-300"
+            className="text-xl md:text-2xl font-black tracking-widest cursor-pointer bg-gradient-to-r from-emerald-500 to-teal-600 dark:from-emerald-400 dark:to-teal-500 bg-clip-text text-transparent uppercase drop-shadow-sm hover:scale-105 transition-transform duration-300"
           >
             ShopIndia
           </h1>
@@ -127,7 +125,7 @@ const Navbar = () => {
           </div>
 
           {/* Mobile Menu Toggle Button */}
-          <div className="md:hidden flex items-center gap-3">
+          <div className="md:hidden flex items-center gap-2">
               {/* Theme Toggle on mobile navbar */}
               <button onClick={toggleTheme} className="p-2 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-800 dark:text-gray-200 transition-all duration-300">
                 {theme === 'dark' ? (
@@ -137,59 +135,37 @@ const Navbar = () => {
                 )}
               </button>
 
-              <button 
-                onClick={() => setIsMenuOpen(!isMenuOpen)} 
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-emerald-600 dark:text-emerald-400 focus:outline-none active:scale-90 transition-all duration-300"
-              >
-                {isMenuOpen ? (
-                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                ) : (
-                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
-                )} 
-              </button>
           </div>
         </div>
 
-        {/* PREMIUM MOBILE MENU DROPDOWN */}
-        {isMenuOpen && (
-        <div className="absolute top-[85px] left-4 right-4 md:hidden z-40 origin-top animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex flex-col p-3 text-[13px] font-black uppercase tracking-widest bg-white/95 dark:bg-[#0a0f16]/95 backdrop-blur-3xl border border-gray-200/50 dark:border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] rounded-[2rem] overflow-hidden">
-            
-            <NavLink to="/" onClick={closeMenu} className="px-5 py-4 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all">Home</NavLink>
-            
-            {user ? (
-              <>
-                <div className="h-[1px] w-full bg-gray-100 dark:bg-white/5 my-1"></div>
-                <NavLink to="/cart" onClick={closeMenu} className="px-5 py-4 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex justify-between">Cart <span className="text-lg">🛒</span></NavLink>
-                <NavLink to="/profile" onClick={closeMenu} className="px-5 py-4 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex justify-between">Profile <span className="text-lg">👤</span></NavLink>
-                <NavLink to="/wallet" onClick={closeMenu} className="px-5 py-4 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex justify-between">Wallet <span className="text-lg">💼</span></NavLink>
-                
-                {isAdminUser && (
-                  <NavLink to="/admin" onClick={closeMenu} className="px-5 py-4 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 transition-all mt-2">Admin Dashboard</NavLink>
-                )}
-                
-                {isDeliveryBoy && (
-                  <NavLink to="/delivery" onClick={closeMenu} className="px-5 py-4 rounded-xl text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 transition-all mt-2">Delivery Panel</NavLink>
-                )}
-                
-                <div className="p-2 mt-2">
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white dark:hover:bg-rose-500 px-4 py-4 rounded-xl text-center transition-all shadow-sm active:scale-95"
-                  >
-                    LOGOUT
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="flex gap-3 p-2 mt-2">
-                <NavLink to="/login" onClick={closeMenu} className="flex-1 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-white px-4 py-4 rounded-xl text-center transition-all active:scale-95">Login</NavLink>
-                <NavLink to="/signup" onClick={closeMenu} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-4 py-4 rounded-xl text-center shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border border-emerald-400/50">Sign up</NavLink>
-              </div>
-            )}
-          </div>
+        <div className="md:hidden max-w-7xl mx-auto mt-3 flex items-center gap-2 rounded-xl bg-white/90 dark:bg-[#0a0f16]/90 border border-gray-200/80 dark:border-white/10 px-3 py-2.5 shadow-sm">
+          <Search size={18} className="text-gray-400" />
+          <input
+            aria-label="Search products"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                navigate(`/?search=${encodeURIComponent(searchQuery.trim())}`);
+              }
+            }}
+            placeholder="Search products, brands and more"
+            className="min-w-0 flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 outline-none"
+          />
+          <NavLink to="/cart" aria-label="Open cart" className="relative p-1 text-gray-700 dark:text-gray-200">
+            <ShoppingCart size={20} />
+            {cartQuantity > 0 && <span className="absolute -right-2 -top-2 min-w-4 h-4 rounded-full bg-rose-500 px-1 text-[9px] leading-4 text-center font-bold text-white">{cartQuantity}</span>}
+          </NavLink>
         </div>
-      )}
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200/80 dark:border-white/10 bg-white/95 dark:bg-[#0a0f16]/95 backdrop-blur-xl px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_25px_rgba(15,23,42,0.08)]" aria-label="Mobile navigation">
+        <div className="mx-auto grid max-w-md grid-cols-4">
+          <NavLink to="/" className={({ isActive }) => `flex flex-col items-center gap-1 py-1 text-[10px] font-bold ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-gray-400"}`}><HomeIcon size={20} /><span>Home</span></NavLink>
+          <NavLink to="/cart" className={({ isActive }) => `relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-gray-400"}`}><ShoppingCart size={20} />{cartQuantity > 0 && <span className="absolute left-1/2 top-0 ml-1 min-w-4 h-4 rounded-full bg-rose-500 px-1 text-[9px] leading-4 text-center text-white">{cartQuantity}</span>}<span>Cart</span></NavLink>
+          <NavLink to={user ? "/profile" : "/login"} className={({ isActive }) => `flex flex-col items-center gap-1 py-1 text-[10px] font-bold ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-gray-400"}`}><UserRound size={20} /><span>{user ? "Account" : "Login"}</span></NavLink>
+          <NavLink to={user ? "/wallet" : "/signup"} className={({ isActive }) => `flex flex-col items-center gap-1 py-1 text-[10px] font-bold ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-gray-500 dark:text-gray-400"}`}><WalletCards size={20} /><span>{user ? "Wallet" : "Join"}</span></NavLink>
+        </div>
+      </nav>
     </div>
   )
 }

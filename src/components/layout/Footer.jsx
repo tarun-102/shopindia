@@ -4,7 +4,7 @@ import useTheme from '../../hooks/useTheme';
 const Footer = () => {
   const { theme, toggleTheme } = useTheme();
   return (
-    <footer className="mt-20 pb-10 px-4 md:px-8 w-full transition-colors duration-500">
+    <footer className="hidden md:block mt-20 pb-10 px-4 md:px-8 w-full transition-colors duration-500">
       <GlassCard className="p-8 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-[#111827]/60 backdrop-blur-xl rounded-3xl shadow-lg dark:shadow-2xl transition-all duration-500">
         
         {/* Brand Info */}

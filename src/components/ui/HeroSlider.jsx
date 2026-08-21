@@ -5,6 +5,7 @@ import { getAllProducts } from "../../services/productservices";
 const HeroSlider = () => {
   const [sliderProducts, setSliderProducts] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState(null);
   const navigate = useNavigate(); 
 
   useEffect(() => {
@@ -37,6 +38,16 @@ const HeroSlider = () => {
 
   const nextSlide = () => setCurrentIndex((prev) => (prev + 1) % sliderProducts.length);
   const prevSlide = () => setCurrentIndex((prev) => (prev === 0 ? sliderProducts.length - 1 : prev - 1));
+  const handleTouchStart = (event) => setTouchStartX(event.touches[0].clientX);
+  const handleTouchEnd = (event) => {
+    if (touchStartX === null) return;
+    const distance = event.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(distance) > 45) {
+      if (distance < 0) nextSlide();
+      else prevSlide();
+    }
+    setTouchStartX(null);
+  };
 
   if (sliderProducts.length === 0) {
       return (
@@ -47,10 +58,15 @@ const HeroSlider = () => {
   }
 
   return (
-    <section className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-emerald-950 dark:via-[#0a0f16] dark:to-teal-950 rounded-[1.5rem] md:rounded-[2.5rem] p-4 py-8 md:p-12 shadow-2xl dark:shadow-[0_10px_40px_rgba(16,185,129,0.05)] border border-gray-200/80 dark:border-emerald-500/10 backdrop-blur-3xl relative overflow-hidden transition-colors duration-500 flex items-center justify-center min-h-[480px] md:min-h-[500px]">
+    <section
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="bg-gradient-to-br from-orange-50 via-gray-50 to-sky-50 dark:from-[#321507] dark:via-[#111827] dark:to-[#082f49] rounded-2xl md:rounded-[2.5rem] p-3 py-4 md:p-10 shadow-xl dark:shadow-[0_10px_40px_rgba(14,165,233,0.14)] border border-orange-200/80 dark:border-orange-500/20 relative overflow-hidden transition-colors duration-500"
+    >
       
       {/* Background Animated Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-3xl bg-emerald-400/10 dark:bg-emerald-500/10 blur-[80px] md:blur-[100px] pointer-events-none rounded-full animate-pulse"></div>
+      <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-orange-300/25 dark:bg-orange-500/10 blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-sky-300/25 dark:bg-sky-500/10 blur-3xl pointer-events-none"></div>
 
       <div className="relative z-10 w-full max-w-6xl mx-auto flex items-center justify-center">
         
@@ -63,31 +79,37 @@ const HeroSlider = () => {
         </button>
 
         {/* Slides Container - Height optimized for vertical stacking on mobile */}
-        <div className="w-full relative overflow-visible h-[420px] sm:h-[400px] md:h-[450px]">
+        <div className="w-full relative min-h-[530px] sm:min-h-[500px] md:min-h-[390px]">
           {sliderProducts.map((product, index) => {
             return (
               <div 
                 key={product.id}
-                className={`transition-all duration-700 ease-in-out absolute inset-0 w-full flex flex-col-reverse md:flex-row items-center justify-center md:justify-between gap-4 sm:gap-8 md:gap-12 px-2 sm:px-8 md:px-16 ${
-                  index === currentIndex ? "opacity-100 translate-x-0 relative z-20" : "opacity-0 translate-x-16 hidden pointer-events-none"
+                  className={`transition-all duration-700 ease-in-out w-full flex flex-col-reverse md:flex-row items-center justify-center md:justify-between gap-3 sm:gap-8 md:gap-12 px-1 sm:px-8 md:px-16 ${
+                  index === currentIndex ? "opacity-100 translate-x-0" : "hidden"
                 }`}
               >
                 {/* Left Side: Text Content (Niche on mobile) */}
-                <div className="text-center md:text-left w-full md:w-1/2 flex flex-col items-center md:items-start justify-center mt-2 md:mt-0">
+                <div className="text-center md:text-left w-full md:w-1/2 flex flex-col items-center md:items-start justify-center pt-1 pb-8 md:py-8 md:mt-0">
                   
                   {product.discount && (
-                    <span className="inline-block px-3 py-1 md:px-5 md:py-1.5 mb-2 md:mb-6 text-[10px] sm:text-xs md:text-sm font-bold text-emerald-800 bg-emerald-100 dark:bg-emerald-900/50 dark:text-emerald-300 rounded-full shadow-sm border border-emerald-200 dark:border-emerald-700/50">
-                      🔥 UP TO {product.discount}% OFF
+                    <span className="inline-flex items-center gap-1 px-3 py-1 md:px-5 md:py-1.5 mb-2 md:mb-5 text-[10px] sm:text-xs md:text-sm font-black text-white bg-orange-500 rounded-md shadow-sm uppercase tracking-wide">
+                      Deal of the day · {product.discount}% off
                     </span>
                   )}
                   
-                  <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black mb-1.5 md:mb-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 dark:from-emerald-300 dark:via-teal-200 dark:to-cyan-300 bg-clip-text text-transparent drop-shadow-sm leading-tight capitalize px-2 md:px-0">
+                  <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black mb-1.5 md:mb-6 text-emerald-700 dark:text-emerald-300 drop-shadow-sm leading-tight capitalize px-2 md:px-0">
                     {product.name}
                   </h1>
                   
                   <p className="text-gray-600 dark:text-gray-300 font-medium tracking-wide text-xs sm:text-sm md:text-lg leading-relaxed max-w-[280px] sm:max-w-md line-clamp-2 md:line-clamp-3">
                     {product.description || "Discover the best deals and premium quality products."}
                   </p>
+
+                  <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 dark:text-gray-300 md:text-xs">
+                    <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-white">4.5 ★</span>
+                    <span>Free delivery</span>
+                    <span className="text-sky-600 dark:text-sky-300">Easy returns</span>
+                  </div>
 
                   {product.price && (
                     <div className="mt-2 md:mt-4 text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
@@ -97,20 +119,20 @@ const HeroSlider = () => {
 
                   <button 
                     onClick={() => navigate(`/product/${product.id}`)}
-                    className="mt-4 md:mt-8 px-6 py-2 md:px-8 md:py-3 text-sm md:text-base bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-full font-bold shadow-lg shadow-emerald-500/30 transform hover:-translate-y-1 hover:scale-105 transition-all duration-300"
+                    className="mt-4 md:mt-7 px-7 py-2.5 md:px-8 md:py-3 text-sm md:text-base bg-[#2874f0] hover:bg-[#1d5fca] text-white rounded-lg font-bold shadow-lg shadow-blue-500/25 transform hover:-translate-y-1 transition-all duration-300"
                   >
-                    Explore Now
+                    Buy now →
                   </button>
                 </div>
 
                 {/* Right Side: PERFECT SHAPE IMAGE CONTAINER (Upar on mobile) */}
-                <div className="w-full md:w-1/2 flex justify-center items-center relative group cursor-pointer mt-4 md:mt-0" onClick={() => navigate(`/product/${product.id}`)}>
+                <div className="w-full md:w-1/2 flex justify-center items-center relative group cursor-pointer mt-1 md:mt-0" onClick={() => navigate(`/product/${product.id}`)}>
                   
                   {/* Glowing Aura */}
                   <div className="absolute inset-0 bg-emerald-300/30 dark:bg-teal-400/20 blur-xl md:blur-2xl rounded-full scale-75 group-hover:scale-110 transition-transform duration-700"></div>
                   
                   {/* UNIFORM SHAPE BOX - Mobile me w-48 h-48, Desktop me w-[320px] */}
-                  <div className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-[320px] md:h-[320px] bg-white/40 dark:bg-gray-800/40 backdrop-blur-md rounded-[1.5rem] md:rounded-[3rem] border border-white/60 dark:border-gray-700 shadow-xl md:shadow-2xl flex items-center justify-center p-4 md:p-6 transition-all duration-500 group-hover:bg-white/60 dark:group-hover:bg-gray-800/60 group-hover:shadow-emerald-500/20">
+                  <div className="relative w-40 h-40 sm:w-56 sm:h-56 md:w-[300px] md:h-[300px] bg-white/90 dark:bg-white/10 backdrop-blur-md rounded-2xl md:rounded-[3rem] border border-white/80 dark:border-gray-700 shadow-xl md:shadow-2xl flex items-center justify-center p-4 md:p-6 transition-all duration-500 group-hover:bg-white dark:group-hover:bg-gray-800/60 group-hover:shadow-sky-500/20">
                     
                     {/* The Image inside the perfect box */}
                     <img 
@@ -138,7 +160,7 @@ const HeroSlider = () => {
       </div>
 
       {/* Dots Indicator - Mobile par thoda upar rakha hai taaki button me touch na ho */}
-      <div className="absolute bottom-2 md:bottom-6 left-1/2 -translate-x-1/2 flex space-x-2 md:space-x-3 z-30">
+      <div className="mt-2 md:mt-5 flex justify-center space-x-2 md:space-x-3 relative z-30">
         {sliderProducts.map((_, index) => (
           <button
             key={index}

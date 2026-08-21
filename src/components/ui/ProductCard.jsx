@@ -30,7 +30,7 @@ function ProductCard({ product }) {
   const discountPercent = Number(product.discount || 0);
 
   return (
-    <div className="group bg-white/80 dark:bg-[#0a0f16]/60 backdrop-blur-xl border border-gray-200/60 dark:border-white/5 rounded-[1rem] md:rounded-[2rem] p-3 md:p-4 flex flex-col justify-between h-full transition-all duration-500 hover:border-emerald-500/50 dark:hover:border-emerald-500/30 shadow-sm hover:shadow-[0_10px_40px_-15px_rgba(16,185,129,0.2)] hover:-translate-y-2 relative overflow-hidden">
+    <div className="group bg-white/90 dark:bg-[#0a0f16]/60 backdrop-blur-xl border border-gray-200/60 dark:border-white/5 rounded-xl md:rounded-[2rem] p-2.5 md:p-4 flex flex-col justify-between h-full transition-all duration-500 hover:border-emerald-500/50 dark:hover:border-emerald-500/30 shadow-sm md:hover:shadow-[0_10px_40px_-15px_rgba(16,185,129,0.2)] md:hover:-translate-y-2 relative overflow-hidden">
 
       {/* Subtle Ambient Glow */}
       <div className="absolute -top-16 -right-16 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-500/20 blur-[40px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
@@ -38,7 +38,7 @@ function ProductCard({ product }) {
       <div>
         {/* Responsive Image Container */}
         <Link to={`/product/${product.id}`} className="block">
-          <div className="relative h-36 sm:h-48 md:h-56 w-full mb-3 md:mb-5 rounded-[0.8rem] md:rounded-[1.5rem] bg-gray-50 dark:bg-gradient-to-br dark:from-white dark:to-gray-100 flex items-center justify-center p-3 md:p-6 overflow-hidden shadow-inner border border-gray-100 dark:border-none">
+          <div className="relative h-32 sm:h-48 md:h-56 w-full mb-3 md:mb-5 rounded-lg md:rounded-[1.5rem] bg-gray-50 dark:bg-gradient-to-br dark:from-white dark:to-gray-100 flex items-center justify-center p-2.5 md:p-6 overflow-hidden shadow-inner border border-gray-100 dark:border-none">
             <img
               src={product.thumbnail}
               alt={product.title}

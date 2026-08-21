@@ -4,17 +4,24 @@
 
 :root {
   --bg-gradient-dark: radial-gradient(circle at top, rgba(250,204,21,0.12), transparent 25%), linear-gradient(135deg, #020617, #3b0764, #020617);
-  --bg-gradient-light: radial-gradient(circle at top, rgba(16,185,129,0.06), transparent 25%), linear-gradient(135deg, #f8fafc, #eef2ff, #fff);
+  --bg-gradient-light: radial-gradient(circle at top, rgba(245,158,11,0.08), transparent 25%), linear-gradient(135deg, #f3f4f6, #f8fafc, #e5e7eb);
   --text-dark: #e6eef8;
   --text-light: #0f172a;
 }
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background-attachment: fixed;
   transition: background 250ms ease, color 200ms ease;
   background: var(--bg-gradient-dark);
   color: var(--text-dark);
+}
+
+@media (max-width: 767px) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* Light theme */
