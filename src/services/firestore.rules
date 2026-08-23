@@ -11,7 +11,7 @@ service cloud.firestore {
         (
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
           // Ensure only 'stock' is being updated
-          request.resource.data.keys().hasOnly(['stock']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
           // New stock must be less-than-or-equal to existing stock (decrement)
           request.resource.data.stock <= resource.data.stock
         )
@@ -81,7 +81,7 @@ service cloud.firestore {
                 resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
                 resource.data.assignedTo == request.auth.uid &&
                 // Only allow updating otp and otpVerified fields
-                request.resource.data.keys().hasOnly(['otp','otpVerified'])
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['otp','otpVerified'])
               )
             )
           )

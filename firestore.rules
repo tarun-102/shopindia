@@ -10,7 +10,7 @@ service cloud.firestore {
         // Delivery partners may ONLY decrement stock as part of delivery finalization
         (
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
-          request.resource.data.keys().hasOnly(['stock']) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
           request.resource.data.stock <= resource.data.stock
         )
       );
@@ -74,7 +74,7 @@ service cloud.firestore {
               resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
               resource.data.assignedTo == request.auth.uid &&
               // Only allow updating otp and otpVerified fields
-              request.resource.data.keys().hasOnly(['otp','otpVerified'])
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['otp','otpVerified'])
             )
           )
         )

@@ -4,7 +4,7 @@ import { doc, updateDoc, getDoc } from "firebase/firestore";
 import notify from '../components/ui/LuxuryToast';
 import Modal from '../components/ui/Modal';
 import { formatPrice } from "../utils/priceFormatter";
-import { getUserOrders, cancelOrderInDB, updateOrderStatusInDB } from "../services/productservices";
+import { getUserOrders, subscribeUserOrders, cancelOrderInDB, updateOrderStatusInDB } from "../services/productservices";
 import { onAuthStateChanged } from "firebase/auth";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
@@ -39,17 +39,31 @@ const Profile = () => {
   const userRole = authState?.role || "customer";
 
   useEffect(() => {
+    let unsubscribeOrders = () => {};
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        fetchOrders(user.uid);
+        setLoading(true);
+        unsubscribeOrders();
+        unsubscribeOrders = subscribeUserOrders(
+          user.uid,
+          (nextOrders) => {
+            setOrders(nextOrders);
+            setLoading(false);
+          },
+          () => setLoading(false)
+        );
       } else {
         setCurrentUser(null);
+        unsubscribeOrders();
         setLoading(false);
       }
     });
     window.scrollTo(0, 0);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeOrders();
+    };
   }, []);
 
   const handleAddMoney = async () => {

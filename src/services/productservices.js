@@ -202,6 +202,25 @@ export const getUserOrders = async (userId) => {
     }
 };
 
+export const subscribeUserOrders = (userId, onUpdate, onError) => {
+    if (!userId) throw new Error("User ID required for order subscription.");
+
+    const ordersQuery = query(collection(db, "orders"), where("userId", "==", userId));
+    return onSnapshot(
+        ordersQuery,
+        (snapshot) => {
+            const orders = snapshot.docs
+                .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            onUpdate(orders);
+        },
+        (error) => {
+            console.error("User order subscription failed:", error);
+            if (onError) onError(error);
+        }
+    );
+};
+
 export const getAllOrders = async () => {
     try {
         const querySnapshot = await getDocs(collection(db, "orders"));
@@ -282,8 +301,8 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
     );
 
     return () => {
-        try { unsub1(); } catch (e) {}
-        try { unsub2(); } catch (e) {}
+        unsub1();
+        unsub2();
     };
 };
 
@@ -380,7 +399,6 @@ export const verifyOrderOTP = async (orderId, otpInput) => {
 
         const updated = await updateOrderStatusInDB(orderId, "Delivered ✅");
         if (updated) {
-            await updateDoc(orderRef, { otpVerified: true, otp: null });
             return { success: true };
         }
         return { success: false, error: "Failed to mark order delivered." };
