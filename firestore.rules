@@ -34,7 +34,7 @@ service cloud.firestore {
           (
             resource.data.assignedTo == request.auth.uid ||
             // Support both plain and emoji variants of statuses
-            resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚']
+            resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡', 'Order Confirmed', 'Order Confirmed 🟢', 'Out for Delivery', 'Out for Delivery 🚚']
           )
         )
       );
@@ -49,9 +49,16 @@ service cloud.firestore {
             // Accept an unassigned or pending/assigning order: set status -> 'Out for Delivery 🚚' and assign to self
             (
               // Accept both plain and emoji pending variants
-              resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡'] &&
+              resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡', 'Order Confirmed', 'Order Confirmed 🟢'] &&
               request.resource.data.status == 'Out for Delivery 🚚' &&
               request.resource.data.assignedTo == request.auth.uid
+            ) ||
+            // Delivery partner may release their active assignment for reassignment.
+            (
+              resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
+              resource.data.assignedTo == request.auth.uid &&
+              request.resource.data.status == 'Assigning Delivery Partner 🟡' &&
+              request.resource.data.assignedTo == null
             ) ||
             // Mark an assigned order as delivered (allow delivery partner to confirm delivery
             // even if status string variants differ). Require assignment and that the

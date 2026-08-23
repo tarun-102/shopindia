@@ -226,7 +226,12 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
         throw new Error("Delivery personnel ID required for subscription.");
     }
 
-    const allowedStatuses = ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚'];
+    const allowedStatuses = [
+        'Pending', 'Pending ⏳',
+        'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡',
+        'Order Confirmed', 'Order Confirmed 🟢',
+        'Out for Delivery', 'Out for Delivery 🚚'
+    ];
 
     const qStatuses = query(collection(db, "orders"), where("status", "in", allowedStatuses));
     const qAssigned = query(collection(db, "orders"), where("assignedTo", "==", deliveryBoyId));
@@ -304,7 +309,8 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
             if (statusLower.includes('cancel')) {
                 throw new Error('This order has been cancelled.');
             }
-            if (statusLower.includes('deliver') && !statusLower.includes('out')) {
+            // Match the completed state only. "Delivery" and "Delivering" are not delivered.
+            if (statusLower.includes('delivered')) {
                 throw new Error('This order is already delivered.');
             }
 
@@ -321,6 +327,39 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     } catch (error) {
         console.error("Error assigning order:", error);
         return { success: false, error: error.message || "Failed to process assignment." };
+    }
+};
+
+export const cancelDeliveryAssignment = async (orderId, deliveryBoyId) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) throw new Error("Order record not found.");
+
+            const orderData = orderSnap.data();
+            const status = String(orderData.status || '').toLowerCase();
+            if (orderData.assignedTo !== deliveryBoyId) {
+                throw new Error("This order is not assigned to you.");
+            }
+            if (!status.includes('out for delivery')) {
+                throw new Error("Only active delivery assignments can be cancelled.");
+            }
+
+            transaction.update(orderRef, {
+                status: "Assigning Delivery Partner 🟡",
+                assignedTo: null,
+                otp: null,
+                otpVerified: false,
+                deliveryCancelledAt: new Date().toISOString()
+            });
+        });
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error cancelling delivery assignment:", error);
+        return { success: false, error: error.message || "Failed to release this delivery." };
     }
 };
 

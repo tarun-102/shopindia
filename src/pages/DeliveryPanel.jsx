@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { subscribeDeliveryOrders, updateOrderStatusInDB, assignOrderToDeliveryBoy, verifyOrderOTP, regenerateOrderOTP } from "../services/productservices";
+import { subscribeDeliveryOrders, assignOrderToDeliveryBoy, cancelDeliveryAssignment, verifyOrderOTP, regenerateOrderOTP } from "../services/productservices";
 import notify from '../components/ui/LuxuryToast';
 import Modal from '../components/ui/Modal';
 import { formatPrice } from "../utils/priceFormatter";
@@ -18,6 +18,8 @@ import {
   Split
 } from "lucide-react";
 
+const getOrderStatus = (order) => String(order?.status || "").toLowerCase();
+
 const DeliveryPanel = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,8 @@ const DeliveryPanel = () => {
   const [activeTab, setActiveTab] = useState("available"); 
   const [currentPage, setCurrentPage] = useState(1);
   const [acceptingOrderId, setAcceptingOrderId] = useState(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null);
+  const [releaseOrderId, setReleaseOrderId] = useState(null);
   const ordersPerPage = 6;
 
   const user = useSelector((state) => state.auth.user);
@@ -83,6 +87,21 @@ const DeliveryPanel = () => {
     setOtpModal({ show: true, orderId, otp: "" });
   };
 
+  const handleCancelDelivery = async (orderId) => {
+    if (!user?.uid || cancellingOrderId) return;
+
+    setReleaseOrderId(null);
+    setCancellingOrderId(orderId);
+    const result = await cancelDeliveryAssignment(orderId, user.uid);
+    setCancellingOrderId(null);
+
+    if (result.success) {
+      notify.success("Delivery Released", "This order is available for another delivery partner.");
+    } else {
+      notify.error("Release Failed", result.error || "Could not release this delivery.");
+    }
+  };
+
   const handleRegenerateOtp = async (orderId) => {
     if (!user?.uid) return;
     setLoading(true);
@@ -114,15 +133,15 @@ const DeliveryPanel = () => {
   };
 
   const filteredOrders = orders.filter((order) => {
-    const status = order.status || "";
-    if (status.toLowerCase().includes('cancel')) return false;
+    const status = getOrderStatus(order);
+    if (status.includes('cancel')) return false;
 
     if (activeTab === "available") {
-      const isPendingOrReady = (status.includes("pending") || status.includes("Assigning") || status.includes("Confirmed") || status.includes("🟢") || status.includes("🟡")) && !order.assignedTo;
-      const isMyActiveDelivery = order.assignedTo === user?.uid && !status.includes("Delivered");
+      const isPendingOrReady = (status.includes("pending") || status.includes("assigning") || status.includes("confirmed")) && !order.assignedTo;
+      const isMyActiveDelivery = order.assignedTo === user?.uid && !status.includes("delivered");
       return isPendingOrReady || isMyActiveDelivery;
     } else {
-      return order.assignedTo === user?.uid && (status.includes("Delivered") || status.includes("✅"));
+      return order.assignedTo === user?.uid && status.includes("delivered");
     }
   });
 
@@ -157,7 +176,7 @@ const DeliveryPanel = () => {
               : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-800"
           }`}
         >
-          📦 Active Dispatches ({orders.filter(o => !o.status?.includes("Delivered")).length})
+          📦 Active Dispatches ({orders.filter((order) => order.assignedTo === user?.uid && !getOrderStatus(order).includes("delivered")).length})
         </button>
         <button
           onClick={() => { setActiveTab("history"); setCurrentPage(1); }}
@@ -193,8 +212,9 @@ const DeliveryPanel = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {paginatedOrders.map((order) => {
               const isAssignedToMe = order.assignedTo === user?.uid;
-              const canAccept = !order.assignedTo;
+              const canAccept = !order.assignedTo && !getOrderStatus(order).includes("delivered");
               const isBeingAccepted = acceptingOrderId === order.id;
+              const isBeingCancelled = cancellingOrderId === order.id;
 
               return (
                 <div 
@@ -212,7 +232,7 @@ const DeliveryPanel = () => {
                   </div>
 
                   {/* Payment Details Pill (Showing Single or Split) */}
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl border border-gray-200/60 dark:border-slate-750">
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-gray-200/60 dark:border-slate-700">
                     <span className="text-gray-500 dark:text-slate-400">Total Amount:</span>
                     <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">₹{formatPrice(order.totalAmount)}</span>
                     <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
@@ -221,7 +241,7 @@ const DeliveryPanel = () => {
                   </div>
 
                   {/* Address Box */}
-                  <div className="space-y-1.5 text-xs text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-3 rounded-xl border border-gray-200/60 dark:border-slate-750">
+                  <div className="space-y-1.5 text-xs text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/70 p-3 rounded-xl border border-gray-200/60 dark:border-slate-700">
                     <div className="flex items-start gap-2">
                       <MapPin size={16} className="text-emerald-500 shrink-0 mt-0.5" />
                       <div>
@@ -248,7 +268,7 @@ const DeliveryPanel = () => {
                       <button
                         onClick={() => handleAcceptOrder(order.id)}
                         disabled={isBeingAccepted}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-slate-950 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                       >
                         {isBeingAccepted ? (
                           <>
@@ -263,11 +283,11 @@ const DeliveryPanel = () => {
                       </button>
                     )}
 
-                    {isAssignedToMe && !order.status?.includes("Delivered") && (
+                    {isAssignedToMe && !getOrderStatus(order).includes("delivered") && (
                       <>
                         <button
                           onClick={() => handleRegenerateOtp(order.id)}
-                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-gray-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
                         >
                           New OTP 🔁
                         </button>
@@ -276,6 +296,13 @@ const DeliveryPanel = () => {
                           className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-colors cursor-pointer"
                         >
                           Verify OTP & Deliver ✅
+                        </button>
+                        <button
+                          onClick={() => setReleaseOrderId(order.id)}
+                          disabled={isBeingCancelled}
+                          className="px-3 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-700 dark:text-rose-300 font-bold text-xs border border-rose-200 dark:border-rose-500/30 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {isBeingCancelled ? "Releasing..." : "Release Order"}
                         </button>
                       </>
                     )}
@@ -335,6 +362,28 @@ const DeliveryPanel = () => {
               className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-pointer"
             >
               Verify & Complete Delivery
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal show={Boolean(releaseOrderId)} title="Release this order?" onClose={() => setReleaseOrderId(null)}>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-slate-300">
+            This order will become available for another delivery partner. It will not be marked as delivered or refunded.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setReleaseOrderId(null)}
+              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+            >
+              Keep Order
+            </button>
+            <button
+              onClick={() => handleCancelDelivery(releaseOrderId)}
+              className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs cursor-pointer"
+            >
+              Release Order
             </button>
           </div>
         </div>
