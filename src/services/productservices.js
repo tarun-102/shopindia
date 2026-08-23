@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, query, onSnapshot, runTransaction } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, query, onSnapshot, runTransaction, arrayUnion } from "firebase/firestore";
 
 // ----------------------------------------------------------------------
 // Product Management Services
@@ -33,7 +33,6 @@ export const getAllProducts = async () => {
         }
     }
 
-    // Fallback block
     try {
         const querySnapshot = await getDocs(collection(db, "products"));
         const products = [];
@@ -56,8 +55,9 @@ export const getTopSellingProducts = async () => {
             const orderData = docItem.data();
             if (orderData.items && Array.isArray(orderData.items)) {
                 orderData.items.forEach((item) => {
-                    if (item.id) {
-                        salesFrequency[item.id] = (salesFrequency[item.id] || 0) + (item.quantity || 1);
+                    const matchedId = item.id || item.productId;
+                    if (matchedId) {
+                        salesFrequency[matchedId] = (salesFrequency[matchedId] || 0) + (Number(item.quantity) || 1);
                     }
                 });
             }
@@ -65,7 +65,7 @@ export const getTopSellingProducts = async () => {
 
         const sortedProductIds = Object.keys(salesFrequency)
             .sort((a, b) => salesFrequency[b] - salesFrequency[a])
-            .slice(0, 4); 
+            .slice(0, 6); 
 
         const topProducts = [];
         for (const id of sortedProductIds) {
@@ -78,9 +78,6 @@ export const getTopSellingProducts = async () => {
 
         return topProducts;
     } catch (error) {
-        if (error && error.code === 'permission-denied') {
-            return [];
-        }
         console.error("Failed to calculate top selling products:", error);
         return [];
     }
@@ -127,7 +124,7 @@ export const updateProductInDB = async (productId, updatedData) => {
 export const updateProductStock = async (productId, newStock) => {
     try {
         const productRef = doc(db, "products", productId);
-        await updateDoc(productRef, { stock: Number(newStock) });
+        await updateDoc(productRef, { stock: Math.max(0, Number(newStock)) });
         return { success: true };
     } catch (error) {
         console.error("Error updating product stock:", error);
@@ -168,15 +165,16 @@ export const getProductsByCategory = async (categoryValue) => {
 };
 
 // ----------------------------------------------------------------------
-// Order Management Services
+// Order Management Services (With Split Payments & Detailed Wallet Refunds)
 // ----------------------------------------------------------------------
 
 export const placeOrderInDB = async (orderData) => {
     try {
         const finalOrderData = {
             ...orderData,
-            status: "Pending", 
+            status: "Pending ⏳", 
             assignedTo: null, 
+            refunded: false,
             date: orderData.date || new Date().toISOString()
         };
         const docRef = await addDoc(collection(db, "orders"), finalOrderData);
@@ -204,7 +202,7 @@ export const getUserOrders = async (userId) => {
     }
 };
 
-export const getAllOrders = async (userId) => {
+export const getAllOrders = async () => {
     try {
         const querySnapshot = await getDocs(collection(db, "orders"));
         const orders = [];
@@ -220,45 +218,6 @@ export const getAllOrders = async (userId) => {
     } catch (error) {
         console.error("Error fetching all orders:", error);
         return [];
-    }
-};
-
-export const getDeliveryOrders = async (deliveryBoyId) => {
-    if (!deliveryBoyId) {
-        throw new Error("Delivery personnel ID required.");
-    }
-
-    try {
-        const allowedStatuses = ['Pending', 'Pending ⏳', 'Assigning Delivery Partner 🟡', 'Order Confirmed 🟢', 'Out for Delivery 🚚'];
-        
-        const qStatuses = query(collection(db, "orders"), where("status", "in", allowedStatuses));
-        const qAssigned = query(collection(db, "orders"), where("assignedTo", "==", deliveryBoyId));
-
-        const [statusSnap, assignedSnap] = await Promise.all([
-            getDocs(qStatuses),
-            getDocs(qAssigned)
-        ]);
-
-        const combined = {};
-        
-        statusSnap.forEach((docItem) => {
-            combined[docItem.id] = { id: docItem.id, ...docItem.data() };
-        });
-        assignedSnap.forEach((docItem) => {
-            combined[docItem.id] = { id: docItem.id, ...docItem.data() };
-        });
-
-        const orders = Object.values(combined);
-
-        return orders.sort((a, b) => {
-            const aTime = new Date(a.date).getTime();
-            const bTime = new Date(b.date).getTime();
-            if (isNaN(aTime) || isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-    } catch (error) {
-        console.error("Error fetching delivery orders:", error);
-        throw error;
     }
 };
 
@@ -326,7 +285,6 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
 export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
-
         const otp = String(Math.floor(1000 + Math.random() * 9000));
 
         await runTransaction(db, async (transaction) => {
@@ -336,17 +294,18 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
             }
 
             const orderData = orderSnap.data();
+            
+            // Atomic concurrency lock check
             if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
-                throw new Error("Order is already assigned.");
+                throw new Error("This order was just accepted by another delivery partner!");
             }
             
-            // FIX: Exact string match instead of .includes('deliver')
             const statusLower = String(orderData.status || '').toLowerCase();
             if (statusLower.includes('cancel')) {
-                throw new Error('Order has been cancelled.');
+                throw new Error('This order has been cancelled.');
             }
-            if (orderData.status === 'Delivered ✅' || orderData.status === 'Delivered') {
-                throw new Error('Order already delivered.');
+            if (statusLower.includes('deliver') && !statusLower.includes('out')) {
+                throw new Error('This order is already delivered.');
             }
 
             transaction.update(orderRef, {
@@ -354,6 +313,7 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
                 assignedTo: deliveryBoyId,
                 otp: otp,
                 otpVerified: false,
+                acceptedAt: new Date().toISOString()
             });
         });
 
@@ -376,7 +336,7 @@ export const verifyOrderOTP = async (orderId, otpInput) => {
             return { success: false, error: "No OTP set for this order." };
         }
         if (String(data.otp) !== String(otpInput)) {
-            return { success: false, error: "Invalid OTP provided." };
+            return { success: false, error: "Invalid OTP code." };
         }
 
         const updated = await updateOrderStatusInDB(orderId, "Delivered ✅");
@@ -391,35 +351,94 @@ export const verifyOrderOTP = async (orderId, otpInput) => {
     }
 };
 
+// AUTOMATED REFUND ON CANCELLATION (CARD, UPI, WALLET & SPLIT PAYMENT)
 export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {}) => {
     try {
         const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (!orderSnap.exists()) {
+            return { success: false, error: "Order record not found." };
+        }
+
+        const orderData = orderSnap.data();
+        const orderTime = new Date(orderData.date).getTime();
+        const elapsedMs = Date.now() - orderTime;
 
         if (!isAdmin) {
-            const orderSnap = await getDoc(orderRef);
-            if (!orderSnap.exists()) {
-                return { success: false, error: "Order record not found." };
-            }
-
-            const orderData = orderSnap.data();
-            const orderTime = new Date(orderData.date).getTime();
-            const elapsedMs = Date.now() - orderTime;
-
             if (orderData.userId !== userId) {
                 return { success: false, error: "Unauthorized cancellation request." };
             }
-            if (orderData.status !== "Pending") {
-                return { success: false, error: "Only pending orders can be cancelled." };
+            const currentStatus = String(orderData.status || '').toLowerCase();
+            if (currentStatus.includes('cancel')) {
+                return { success: false, error: "Order is already cancelled." };
+            }
+            if (currentStatus.includes('deliver') && !currentStatus.includes('partner') && !currentStatus.includes('assigning')) {
+                return { success: false, error: "Delivered orders cannot be cancelled." };
             }
             if (isNaN(orderTime) || elapsedMs > 60000) {
                 return { success: false, error: "Cancellation window has expired." };
             }
         }
 
+        const targetUserId = orderData.userId;
+        const totalAmount = Number(orderData.totalAmount || 0);
+        const paymentMethod = String(orderData.paymentMethod || 'cod').toLowerCase();
+        let refundProcessed = false;
+        let refundAmount = 0;
+        let refundNote = "";
+
+        // Check if Single Prepaid (Card, UPI, Wallet) OR Split Payment
+        if (targetUserId && !orderData.refunded) {
+            if (paymentMethod === 'split' && orderData.paymentBreakdown) {
+                const breakdown = orderData.paymentBreakdown;
+                const prepaidSum = (Number(breakdown.wallet) || 0) + (Number(breakdown.upi) || 0) + (Number(breakdown.card) || 0);
+                if (prepaidSum > 0) {
+                    refundAmount = prepaidSum;
+                    refundNote = `Refund: Cancelled Order #${orderId.slice(0, 6)} (Split: Wallet ₹${breakdown.wallet || 0} + UPI ₹${breakdown.upi || 0} + Card ₹${breakdown.card || 0})`;
+                }
+            } else if (paymentMethod === 'card' || paymentMethod === 'upi' || paymentMethod === 'wallet') {
+                if (totalAmount > 0) {
+                    refundAmount = totalAmount;
+                    refundNote = `Refund: Cancelled Order #${orderId.slice(0, 6)} (${paymentMethod.toUpperCase()})`;
+                }
+            }
+
+            if (refundAmount > 0) {
+                try {
+                    const userRef = doc(db, "users", targetUserId);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const currentWallet = userSnap.data().wallet || { balance: 0, transactions: [] };
+                        const newBalance = (currentWallet.balance || 0) + refundAmount;
+                        const refundTx = {
+                            type: "credit",
+                            amount: refundAmount,
+                            note: refundNote,
+                            date: new Date().toISOString()
+                        };
+                        await updateDoc(userRef, {
+                            "wallet.balance": newBalance,
+                            "wallet.transactions": arrayUnion(refundTx)
+                        });
+                        refundProcessed = true;
+                    }
+                } catch (refundErr) {
+                    console.error("Wallet refund error:", refundErr);
+                }
+            }
+        }
+
         await updateDoc(orderRef, {
-            status: "Cancelled"
+            status: "Cancelled 🔴",
+            refunded: refundProcessed,
+            cancelledAt: new Date().toISOString()
         });
-        return { success: true };
+
+        return { 
+            success: true, 
+            refundAmount: refundProcessed ? refundAmount : 0,
+            refunded: refundProcessed 
+        };
     } catch (error) {
         console.error("Error cancelling order:", error);
         return { success: false, error: error.message || "Failed to cancel order." };
@@ -430,7 +449,6 @@ export const updateOrderStatusInDB = async (orderId, status) => {
     try {
         const orderRef = doc(db, "orders", orderId);
         
-        // FIX: Replaced .includes('deliver') with exact match to stop it from running on "Assigning Delivery Partner 🟡"
         if (status === "Delivered ✅" || status === "Delivered") {
             await runTransaction(db, async (transaction) => {
                 const orderSnap = await transaction.get(orderRef);
@@ -438,7 +456,7 @@ export const updateOrderStatusInDB = async (orderId, status) => {
                 const orderData = orderSnap.data();
                 const items = orderData.items || [];
 
-                const prodRefs = items.map((item) => doc(db, "products", String(item.id))).filter(Boolean);
+                const prodRefs = items.map((item) => doc(db, "products", String(item.id || item.productId))).filter(Boolean);
                 const prodSnaps = [];
                 for (const ref of prodRefs) {
                     prodSnaps.push(await transaction.get(ref));
@@ -450,7 +468,7 @@ export const updateOrderStatusInDB = async (orderId, status) => {
                     const item = items[i];
                     const prodRef = prodRefs[i];
                     const prodSnap = prodSnaps[i];
-                    if (!item || !item.id || !prodSnap.exists()) continue;
+                    if (!item || !prodSnap.exists()) continue;
                     const currentStock = Number(prodSnap.data().stock || 0);
                     const qty = Number(item.quantity || 1);
                     const newStock = Math.max(0, currentStock - qty);

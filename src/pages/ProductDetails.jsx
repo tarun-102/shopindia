@@ -1,57 +1,46 @@
 import { useState, useEffect } from "react"; 
 import { useLoaderData, useNavigate } from "react-router-dom";
-import ProductCard from "../components/ui/ProductCard";
-import GlassCard from "../components/ui/GlassCard";
 import { updateProductInDB } from "../services/productservices";
 import { formatPrice } from "../utils/priceFormatter";
 import { useDispatch } from "react-redux";
 import { addToCart } from "../store/slices/CartSlice";
-import toast from 'react-hot-toast';
+import notify from "../components/ui/LuxuryToast";
+import { 
+  Star, 
+  ShoppingCart, 
+  Zap, 
+  Truck, 
+  ShieldCheck, 
+  RefreshCw, 
+  Sparkles,
+  ArrowLeft
+} from "lucide-react";
 
 const ProductDetails = () => {
   const product = useLoaderData();
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // ---------------------------------------------------------------------------
-  // Component States
-  // ---------------------------------------------------------------------------
   const [reviewName, setReviewName] = useState("");
   const [rating, setRating] = useState("5");
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [reviewList, setReviewList] = useState(product.review || []);
+  const [reviewList, setReviewList] = useState(product?.review || []);
 
-  // Sync reviews when product changes
   useEffect(() => {
-    setReviewList(product.review || []);
-  }, [product.id, product.review]);
+    setReviewList(product?.review || []);
+  }, [product?.id, product?.review]);
 
-  // ---------------------------------------------------------------------------
-  // Custom Alert Notification Trigger
-  // ---------------------------------------------------------------------------
-  const showCustomAlert = (message, icon) => {
-    toast.success(`${icon || ''} ${message}`, {
-      className: 'dark:bg-[#111827] dark:text-white dark:border-white/10 bg-white text-gray-900 border-gray-200 shadow-lg'
-    });
-  };
-
-  // ---------------------------------------------------------------------------
-  // Action Handlers
-  // ---------------------------------------------------------------------------
   const handleAddToCart = () => {
     if (Number(product.stock || 0) <= 0) {
-      toast.error('This product is out of stock and cannot be added to cart.');
+      notify.error("Out of Stock", "This product is currently unavailable.");
       return;
     }
     dispatch(addToCart(product));
-    showCustomAlert(`${product.title} added to cart successfully`, "🛒");
+    notify.cart(product.title, product.price);
   };
 
-  /**
-   * Handles review submission, updates database, and refreshes local state.
-   */
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -72,165 +61,240 @@ const ProductDetails = () => {
     setComment("");
     setIsSubmitting(false);
 
-    showCustomAlert("Thank you for your feedback!", "✨");
+    notify.success("Review Posted! ✨", "Thank you for sharing your feedback with the community.");
   };
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  if (!product) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-gray-500">Product not found.</p>
+        <button onClick={() => navigate("/")} className="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold">
+          Go Back Home
+        </button>
+      </div>
+    );
+  }
+
+  const inStock = Number(product.stock || 0) > 0;
+  const sellingPrice = Number(product.price || product.mrp || 0);
+  const mrpPrice = Number(product.mrp || product.price || 0);
+  const discountPercent = Number(product.discount || product.discountPercentage || 0);
+
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-10 space-y-16 relative transition-colors duration-500">
+    <div className="space-y-8 md:space-y-12 pb-10 transition-colors duration-300">
       
+      {/* Back Button */}
+      <div>
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={16} />
+          <span>Back to products</span>
+        </button>
+      </div>
+
       {/* Main Product Showcase Card */}
-      <GlassCard className="p-6 md:p-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center bg-white/90 dark:bg-[#111827]/80 backdrop-blur-2xl border-gray-200 dark:border-white/10 rounded-[2.5rem] shadow-xl dark:shadow-2xl">
+      <div className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 items-start">
+          
+          {/* Left Column: Product Image in Clean Studio Frame */}
+          <div className="md:col-span-5 flex items-center justify-center bg-gradient-to-b from-white via-slate-50 to-gray-100 dark:from-slate-800/80 dark:to-slate-850 rounded-2xl p-6 border border-gray-200 dark:border-slate-700/80 aspect-square shadow-inner">
+            <img
+              src={product.thumbnail || "https://placehold.co/500x500/png?text=Product"}
+              alt={product.title}
+              className="max-h-[380px] w-full object-contain drop-shadow-md hover:scale-105 transition-transform duration-300"
+            />
+          </div>
 
-        {/* Left Column: Product Image with Zoom Effect */}
-        <div className="group overflow-hidden bg-gray-50 dark:bg-white rounded-3xl p-8 flex justify-center items-center relative border border-gray-200 dark:border-gray-100 shadow-inner">
-          <img
-            src={product.thumbnail}
-            alt={product.title}
-            className="rounded-2xl max-h-[450px] object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500 ease-out"
-          />
-        </div>
-
-        {/* Right Column: Product Metadata & Actions */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-3.5 py-1 rounded-full text-xs font-bold tracking-widest uppercase shadow-sm">
-              {product.category}
-            </span>
-            <div className="bg-teal-600 dark:bg-teal-500 text-white px-2.5 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">
-              {product.rating || "5.0"} ★
+          {/* Right Column: Metadata & Buy Box */}
+          <div className="md:col-span-7 space-y-4">
+            
+            {/* Category & Rating */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-2.5 py-0.5 rounded-md text-[10px] sm:text-xs font-black tracking-wider uppercase">
+                {product.category || "General"}
+              </span>
+              <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md text-xs font-bold border border-amber-200 dark:border-amber-500/20">
+                <Star size={12} fill="currentColor" />
+                <span>{product.rating || "4.8"} (Verified Ratings)</span>
+              </div>
             </div>
-          </div>
 
-          <h1 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white leading-tight">
-            {product.title}
-          </h1>
+            {/* Title */}
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white leading-tight">
+              {product.title}
+            </h1>
 
-          <p className="text-gray-700 dark:text-gray-300 text-base md:text-lg leading-relaxed border-l-4 border-emerald-500 pl-4 bg-gray-50 dark:bg-white/5 py-3 rounded-r-2xl shadow-sm">
-            {product.description}
-          </p>
+            {/* Price Box */}
+            <div className="space-y-1 py-1">
+              <div className="flex items-baseline gap-3">
+                <span className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">
+                  ₹{formatPrice(sellingPrice)}
+                </span>
+                {mrpPrice > sellingPrice && (
+                  <span className="text-sm sm:text-base text-gray-400 dark:text-slate-500 line-through font-semibold">
+                    ₹{formatPrice(mrpPrice)}
+                  </span>
+                )}
+                {discountPercent > 0 && (
+                  <span className="bg-rose-500 text-white text-xs font-black px-2 py-0.5 rounded-md">
+                    {discountPercent}% OFF
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400">Inclusive of all applicable taxes.</p>
+            </div>
 
-          <div className="space-y-1">
-            <p className="text-gray-400 text-sm line-through">M.R.P.: ₹ {formatPrice((product.price || 0) + 50)}</p>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-4xl font-black text-emerald-600 dark:text-emerald-400">
-                ₹ {formatPrice(product.price)}
-              </span>
-              <span className="text-teal-700 dark:text-teal-400 font-bold text-sm bg-teal-50 dark:bg-teal-500/10 px-2.5 py-1 rounded-md border border-teal-200 dark:border-teal-500/20">
-                Save {product.discountPercentage || 15}%
-              </span>
-              <span className={`text-xs uppercase font-bold px-3 py-1 rounded-full shadow-sm ${Number(product.stock || 0) > 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/20' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-500/20'}`}>
-                {Number(product.stock || 0) > 0 ? `In stock: ${product.stock}` : 'Out of Stock'}
+            {/* In Stock Badge */}
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${inStock ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+              <span className={`text-xs font-bold ${inStock ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {inStock ? (product.stock < 10 ? `Hurry! Only ${product.stock} items left in stock` : 'In Stock · Ready for Dispatch') : 'Currently Out of Stock'}
               </span>
             </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
-            <button
-              onClick={handleAddToCart}
-              disabled={Number(product.stock || 0) <= 0}
-              className={`bg-gray-100 dark:bg-white/5 border border-gray-300 dark:border-white/10 font-bold py-4 rounded-xl transition-all flex justify-center items-center gap-2 shadow-sm ${Number(product.stock || 0) <= 0 ? 'text-gray-400 cursor-not-allowed opacity-60 hover:bg-gray-100 dark:hover:bg-white/5' : 'text-gray-800 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10'}`}
-            >
-              {Number(product.stock || 0) <= 0 ? 'Out of Stock' : 'Add to Cart 🛒'}
-            </button>
+            {/* Description */}
+            <div className="border-t border-gray-100 dark:border-slate-800 pt-3">
+              <h3 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">About this item</h3>
+              <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 leading-relaxed">
+                {product.description || "Premium quality product curated by ShopIndia with fast nationwide delivery."}
+              </p>
+            </div>
 
-            <button
-              onClick={() => {
-                if (Number(product.stock || 0) <= 0) {
-                  toast.error('This product is out of stock and cannot be purchased.');
-                  return;
-                }
-                dispatch(addToCart(product));
-                navigate('/cart');
-              }}
-              disabled={Number(product.stock || 0) <= 0}
-              className={`bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black py-4 rounded-xl transition-all shadow-md dark:shadow-lg dark:shadow-emerald-500/30 flex justify-center items-center gap-2 ${Number(product.stock || 0) <= 0 ? 'opacity-60 cursor-not-allowed grayscale' : 'hover:from-emerald-500 hover:to-teal-400'}`}
-            >
-              {Number(product.stock || 0) <= 0 ? 'Unavailable' : 'Buy Now ⚡'}
-            </button>
+            {/* Trust Points */}
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-center">
+              <div className="p-2 rounded-xl bg-gray-50 dark:bg-slate-850">
+                <Truck size={18} className="mx-auto text-emerald-500 mb-1" />
+                <span className="text-[10px] font-bold text-gray-700 dark:text-slate-300 block">Free Delivery</span>
+              </div>
+              <div className="p-2 rounded-xl bg-gray-50 dark:bg-slate-850">
+                <RefreshCw size={18} className="mx-auto text-blue-500 mb-1" />
+                <span className="text-[10px] font-bold text-gray-700 dark:text-slate-300 block">7-Day Returns</span>
+              </div>
+              <div className="p-2 rounded-xl bg-gray-50 dark:bg-slate-850">
+                <ShieldCheck size={18} className="mx-auto text-amber-500 mb-1" />
+                <span className="text-[10px] font-bold text-gray-700 dark:text-slate-300 block">100% Genuine</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3 pt-4">
+              <button
+                onClick={handleAddToCart}
+                disabled={!inStock}
+                className="py-3 px-4 rounded-xl bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-900 dark:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <ShoppingCart size={16} />
+                <span>Add to Cart</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!inStock) return;
+                  dispatch(addToCart(product));
+                  notify.cart(product.title, product.price);
+                  navigate('/cart');
+                }}
+                disabled={!inStock}
+                className="py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <Zap size={16} className="fill-current text-white" />
+                <span>Buy Now</span>
+              </button>
+            </div>
+
           </div>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Review Submission Form Section */}
-      <section>
-        <GlassCard className="p-8 md:p-10 border-gray-200 dark:border-white/10 bg-white/90 dark:bg-[#111827]/80 backdrop-blur-2xl rounded-[2rem] shadow-xl dark:shadow-2xl">
-          <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6">Leave Your Review ✍️</h2>
+      {/* Review Submission & List Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Write Review Form */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">Leave Customer Feedback ✍️</h3>
 
-          <form className="space-y-5" onSubmit={handleReviewSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <form onSubmit={handleReviewSubmit} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Your Name</label>
               <input
                 type="text"
                 value={reviewName}
                 onChange={(e) => setReviewName(e.target.value)}
-                placeholder="Your Name"
-                className="bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-gray-700 p-4 rounded-xl text-gray-900 dark:text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-sm"
+                placeholder="e.g. Rahul Sharma"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-emerald-500"
                 required
               />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Rating</label>
               <select
                 value={rating}
                 onChange={(e) => setRating(e.target.value)}
-                className="bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-gray-700 p-4 rounded-xl text-gray-900 dark:text-white outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-sm"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-850 text-gray-900 dark:text-white text-xs sm:text-sm outline-none focus:border-emerald-500"
               >
-                <option value="5" className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">⭐⭐⭐⭐⭐ (Excellent)</option>
-                <option value="4" className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">⭐⭐⭐⭐ (Good)</option>
-                <option value="3" className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">⭐⭐⭐ (Average)</option>
-                <option value="2" className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">⭐⭐ (Poor)</option>
-                <option value="1" className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white">⭐ (Terrible)</option>
+                <option value="5" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">⭐⭐⭐⭐⭐ 5 Stars (Excellent)</option>
+                <option value="4" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">⭐⭐⭐⭐ 4 Stars (Good)</option>
+                <option value="3" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">⭐⭐⭐ 3 Stars (Average)</option>
+                <option value="2" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">⭐⭐ 2 Stars (Poor)</option>
+                <option value="1" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">⭐ 1 Star (Terrible)</option>
               </select>
             </div>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="What did you like or dislike about this product?"
-              className="w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-gray-700 p-4 rounded-xl text-gray-900 dark:text-white h-32 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-none shadow-sm"
-              required
-            ></textarea>
+
+            <div>
+              <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Comment</label>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Write your thoughts on this product..."
+                rows="3"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-emerald-500 resize-none"
+                required
+              ></textarea>
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-10 py-4 rounded-xl transition-all shadow-md dark:shadow-lg dark:shadow-emerald-500/20 disabled:opacity-50"
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer"
             >
-              {isSubmitting ? "Submitting... ⏳" : "Submit Review"}
+              {isSubmitting ? "Submitting..." : "Post Review"}
             </button>
           </form>
-        </GlassCard>
-      </section>
-
-      {/* Customer Reviews List Section */}
-      <div className="space-y-8">
-        <div className="border-b border-gray-200 dark:border-white/10 pb-4">
-          <h2 className="text-3xl font-black text-gray-900 dark:text-white">
-            Customer Reviews 🗣️
-          </h2>
         </div>
 
-        {reviewList.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 italic text-lg text-center py-12 bg-gray-50 dark:bg-white/5 rounded-3xl border border-gray-200 dark:border-white/5 shadow-sm">
-            No reviews yet. Be the first to review this product! 🚀
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {reviewList.map((rev, index) => (
-              <GlassCard key={index} className="p-6 bg-white dark:bg-[#111827]/60 backdrop-blur-xl border-gray-200 dark:border-white/10 hover:border-emerald-400 dark:hover:border-emerald-500/40 transition-colors rounded-2xl shadow-md dark:shadow-lg">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 rounded-full flex justify-center items-center text-lg font-black text-emerald-600 dark:text-emerald-400 uppercase shadow-inner">
-                    {rev.reviewName ? rev.reviewName.charAt(0) : "U"}
+        {/* Customer Reviews List */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">Customer Reviews ({reviewList.length})</h3>
+
+          {reviewList.length === 0 ? (
+            <p className="text-gray-400 text-xs py-8 text-center">No reviews yet. Be the first to share your experience!</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {reviewList.map((rev, index) => (
+                <div key={index} className="p-3 bg-gray-50 dark:bg-slate-850 rounded-xl border border-gray-100 dark:border-slate-800 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold uppercase">
+                        {rev.reviewName?.charAt(0) || "U"}
+                      </div>
+                      <span className="font-bold text-xs text-gray-900 dark:text-white">{rev.reviewName || "Customer"}</span>
+                    </div>
+                    <span className="text-amber-500 text-xs">{"★".repeat(Math.round(rev.rating || 5))}</span>
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-900 dark:text-white text-base">{rev.reviewName}</p>
-                    <p className="text-amber-500 dark:text-amber-400 text-xs tracking-wider">{"★".repeat(Math.round(rev.rating))}</p>
-                  </div>
+                  <p className="text-xs text-gray-600 dark:text-slate-300 pl-9 leading-relaxed">
+                    "{rev.comment}"
+                  </p>
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 text-sm italic leading-relaxed">"{rev.comment}"</p>
-              </GlassCard>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
+
     </div>
   );
 };

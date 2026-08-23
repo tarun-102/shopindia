@@ -1,76 +1,74 @@
-import GlassCard from "../ui/GlassCard";
 import useTheme from '../../hooks/useTheme';
+import { Sun, Moon, Sparkles, Heart } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   const { theme, toggleTheme } = useTheme();
+
   return (
-    <footer className="hidden md:block mt-20 pb-10 px-4 md:px-8 w-full transition-colors duration-500">
-      <GlassCard className="p-8 md:p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-[#111827]/60 backdrop-blur-xl rounded-3xl shadow-lg dark:shadow-2xl transition-all duration-500">
-        
-        {/* Brand Info */}
-        <div className="flex flex-col space-y-4">
-          <h2 className="text-3xl font-black bg-gradient-to-r from-cyan-500 to-blue-600 dark:from-cyan-400 dark:to-blue-500 bg-clip-text text-transparent drop-shadow-sm">
-            ShopIndia 💎
-          </h2>
-          <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed max-w-sm transition-colors">
-            Delivering quality products across India with reliable service and competitive prices. Experience premium shopping.
-          </p>
-        </div>
-
-        {/* Quick Links */}
-        <div className="flex flex-col space-y-4">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-wide transition-colors">Quick Links</h3>
-          <ul className="text-gray-600 dark:text-gray-400 space-y-3 text-sm font-medium">
-            <li className="group hover:text-cyan-600 dark:hover:text-cyan-400 hover:translate-x-2 transform transition-all duration-300 cursor-pointer flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span> 
-              About Us
-            </li>
-            <li className="group hover:text-cyan-600 dark:hover:text-cyan-400 hover:translate-x-2 transform transition-all duration-300 cursor-pointer flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span> 
-              Contact: Khodiyar Nagar, Ahmedabad
-            </li>
-            <li className="group hover:text-cyan-600 dark:hover:text-cyan-400 hover:translate-x-2 transform transition-all duration-300 cursor-pointer flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span> 
-              Privacy Policy
-            </li>
-          </ul>
-        </div>
-
-        {/* Social & Support */}
-        <div className="flex flex-col space-y-4">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-wide transition-colors">Stay Connected</h3>
-          <p className="text-gray-600 dark:text-gray-400 text-sm transition-colors">Subscribe for product updates, offers, and new releases.</p>
-          <div className="flex gap-4 pt-2">
-            {/* FB Icon */}
-            <span className="flex items-center justify-center w-11 h-11 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white rounded-full hover:bg-blue-50 hover:border-blue-500 hover:text-blue-600 dark:hover:bg-blue-600/20 dark:hover:text-blue-400 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer shadow-sm dark:shadow-lg">
-              FB
-            </span>
-            {/* IG Icon */}
-            <span className="flex items-center justify-center w-11 h-11 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white rounded-full hover:bg-pink-50 hover:border-pink-500 hover:text-pink-600 dark:hover:bg-pink-500/20 dark:hover:text-pink-400 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer shadow-sm dark:shadow-lg">
-              IG
-            </span>
-            {/* YT Icon */}
-            <span className="flex items-center justify-center w-11 h-11 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white rounded-full hover:bg-red-50 hover:border-red-500 hover:text-red-600 dark:hover:bg-red-600/20 dark:hover:text-red-400 hover:-translate-y-1.5 transition-all duration-300 cursor-pointer shadow-sm dark:shadow-lg">
-              YT
-            </span>
+    <footer className="hidden md:block mt-16 border-t border-gray-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          
+          {/* Brand Info */}
+          <div className="space-y-3 md:col-span-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center text-white font-black text-sm">
+                S
+              </div>
+              <span className="text-lg font-black tracking-tight text-gray-900 dark:text-white uppercase">
+                ShopIndia
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+              India's favorite online store delivering genuine products, unbeatable deals, and nationwide express shipping.
+            </p>
           </div>
-        </div>
-      </GlassCard>
 
-      {/* Copyright & Theme Toggle */}
-      <div className="flex flex-col md:flex-row justify-between items-center mt-6 px-4 gap-3">
-        <div className="flex items-center gap-4">
-          <p className="text-center text-gray-500 dark:text-white/40 text-xs font-medium transition-colors">© 2026 ShopIndia. All rights reserved.</p>
-          <p className="text-center text-gray-400 dark:text-white/30 text-xs font-medium transition-colors">Version 1.5.6</p>
+          {/* Quick Links */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Shopping Links</h3>
+            <ul className="space-y-1.5 text-xs text-gray-600 dark:text-slate-400">
+              <li><Link to="/" className="hover:text-emerald-600 dark:hover:text-emerald-400">Home Store</Link></li>
+              <li><Link to="/cart" className="hover:text-emerald-600 dark:hover:text-emerald-400">Cart & Checkout</Link></li>
+              <li><Link to="/wallet" className="hover:text-emerald-600 dark:hover:text-emerald-400">ShopIndia Wallet</Link></li>
+              <li><Link to="/profile" className="hover:text-emerald-600 dark:hover:text-emerald-400">Order History</Link></li>
+            </ul>
+          </div>
+
+          {/* Customer Care */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Customer Care</h3>
+            <ul className="space-y-1.5 text-xs text-gray-600 dark:text-slate-400">
+              <li><span>Khodiyar Nagar, Ahmedabad, Gujarat</span></li>
+              <li><span>7-Day Easy Replacement Policy</span></li>
+              <li><span>100% Purchase Protection</span></li>
+              <li><span>24/7 Verified Support</span></li>
+            </ul>
+          </div>
+
+          {/* Preferences & Theme */}
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Preferences</h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Switch theme appearance anytime:</p>
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 text-xs font-bold border border-gray-200 dark:border-slate-700"
+            >
+              {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-700" />}
+              <span>{theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
+            </button>
+          </div>
+
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            className="px-4 py-2 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-800 dark:text-white/90 hover:bg-gray-50 dark:hover:bg-white/10 transition-all flex items-center gap-2 shadow-sm dark:shadow-none"
-          >
-            {theme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
-          </button>
+
+        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400 dark:text-slate-500">
+          <p>© 2026 ShopIndia. Designed for modern Indian e-commerce.</p>
+          <div className="flex items-center gap-1">
+            <span>Built with</span>
+            <Heart size={13} className="text-rose-500 fill-current" />
+            <span>in India</span>
+          </div>
         </div>
       </div>
     </footer>

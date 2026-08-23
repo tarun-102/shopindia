@@ -4,8 +4,19 @@ import { auth, db } from "../services/firebase";
 import { doc, getDoc, updateDoc, onSnapshot, arrayUnion } from "firebase/firestore";
 import { addWalletTransaction } from "../services/walletService";
 import Modal from "../components/ui/Modal";
-import toast from 'react-hot-toast';
+import notify from "../components/ui/LuxuryToast";
 import { formatPrice } from "../utils/priceFormatter";
+import { 
+  WalletCards, 
+  Plus, 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  Clock, 
+  ShieldCheck,
+  Sparkles,
+  Zap,
+  Gift
+} from "lucide-react";
 
 const Wallet = () => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -21,7 +32,6 @@ const Wallet = () => {
         setCurrentUser(u);
         try {
           const userRef = doc(db, "users", u.uid);
-          // Subscribe to realtime updates so balance and transactions show up immediately
           unsubSnapshot = onSnapshot(userRef, (snap) => {
             if (snap.exists()) {
               const data = snap.data();
@@ -50,7 +60,10 @@ const Wallet = () => {
   const submitAdd = async () => {
     if (!currentUser) return;
     const amount = Number(addAmount);
-    if (isNaN(amount) || amount <= 0) return toast.error("Enter a valid amount");
+    if (isNaN(amount) || amount <= 0) {
+      notify.error("Invalid Amount", "Please enter a valid rupee amount to top-up.");
+      return;
+    }
 
     try {
       const userRef = doc(db, "users", currentUser.uid);
@@ -61,47 +74,41 @@ const Wallet = () => {
       const newTx = {
         type: "credit",
         amount: amount,
-        note: "Wallet Top-up",
+        note: "Wallet Top-up (Online)",
         date: new Date().toISOString()
       };
 
-      // Update both balance and push transaction into the array in Firestore
       await updateDoc(userRef, { 
         "wallet.balance": newBalance,
         "wallet.transactions": arrayUnion(newTx)
       });
 
-      // Also call external service if configured
       try {
         await addWalletTransaction(currentUser.uid, newTx);
       } catch (e) {
-        console.warn("External wallet service sync warning:", e);
+        console.warn("External wallet service warning:", e);
       }
 
-      toast.success(`₹${formatPrice(amount)} added successfully! New balance: ₹${formatPrice(newBalance)}`);
+      notify.success("Top-up Successful! 💳", `₹${formatPrice(amount)} has been added to your ShopIndia wallet.`);
       setShowAddMoneyModal(false);
       setAddAmount(500);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to add money to wallet");
+      notify.error("Top-up Failed", "Failed to add money to wallet.");
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-[75vh] gap-5 transition-colors duration-500">
-        <div className="relative flex justify-center items-center">
-            <div className="animate-spin rounded-full h-14 w-14 border-4 border-emerald-200 dark:border-emerald-500/20 border-t-emerald-600 dark:border-t-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.4)]"></div>
-            <div className="absolute w-4 h-4 bg-teal-500 dark:bg-teal-400 rounded-full animate-pulse shadow-lg shadow-teal-500/60"></div>
-        </div>
-        <span className="text-emerald-700 dark:text-emerald-400/90 text-sm font-bold tracking-[0.25em] animate-pulse">
-            LOADING WALLET...
+      <div className="flex flex-col justify-center items-center h-[70vh] gap-3">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-500 border-t-transparent"></div>
+        <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">
+          Loading Wallet...
         </span>
       </div>
     );
   }
 
-  // Extract and sort transactions safely (latest first)
   const txList = (wallet.transactions || []).slice().sort((a, b) => {
     const ad = a.date && a.date.toDate ? a.date.toDate().getTime() : (a.date ? new Date(a.date).getTime() : 0);
     const bd = b.date && b.date.toDate ? b.date.toDate().getTime() : (b.date ? new Date(b.date).getTime() : 0);
@@ -109,91 +116,151 @@ const Wallet = () => {
   });
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 transition-colors duration-500">
+    <div className="space-y-6 md:space-y-8 pb-10 transition-colors duration-300">
       
-      {/* Wallet Balance Card */}
-      <div className="bg-white dark:bg-gradient-to-br dark:from-[#071018] dark:to-[#06101a] border border-gray-200 dark:border-white/6 rounded-[2rem] p-6 md:p-8 shadow-xl dark:shadow-2xl transition-colors">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-black text-gray-900 dark:text-white">My Wallet 💳</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage balance and view transaction history.</p>
+      {/* Wallet Balance Showcase Card (Fixed contrast & luxury styling) */}
+      <div className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 rounded-2xl md:rounded-3xl p-5 md:p-7 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <WalletCards size={24} />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">ShopIndia Wallet</h1>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+              Instant 1-click checkout balance with automated monthly bonus & fast refunds.
+            </p>
           </div>
-          <div className="text-left sm:text-right bg-gray-50 dark:bg-black/30 p-4 rounded-2xl border border-gray-200 dark:border-white/5 w-full sm:w-auto shadow-sm">
-            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold tracking-wider">Available Balance</p>
-            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹ {formatPrice(wallet.balance || 0)}</p>
+
+          {/* Balance Capsule Box - High Contrast Dark & Light */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-slate-850 border border-emerald-200 dark:border-emerald-800/80 w-full sm:w-auto text-left sm:text-right shadow-sm">
+            <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
+              Available Balance
+            </span>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-300 mt-0.5">
+              ₹{formatPrice(wallet.balance || 0)}
+            </p>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-wrap items-center gap-2">
           <button 
             onClick={() => setShowAddMoneyModal(true)} 
-            className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md dark:shadow-lg dark:shadow-emerald-500/20 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
           >
-            + Add Money
+            <Plus size={16} />
+            <span>Top-up Wallet</span>
           </button>
+
+          {/* Quick Top-up Preset Chips */}
+          <div className="hidden sm:flex items-center gap-1.5 ml-2">
+            <span className="text-[11px] font-bold text-gray-400 uppercase">Quick Add:</span>
+            {[100, 500, 1000, 2000].map((amt) => (
+              <button
+                key={amt}
+                onClick={() => { setAddAmount(amt); setShowAddMoneyModal(true); }}
+                className="px-2.5 py-1 bg-gray-100 dark:bg-slate-800 hover:border-emerald-500 border border-transparent text-gray-700 dark:text-slate-300 text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                +₹{amt}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Add Money Modal */}
-      <Modal show={showAddMoneyModal} title="Add Money to Wallet" onClose={() => setShowAddMoneyModal(false)}>
+      <Modal show={showAddMoneyModal} title="Add Funds to Wallet" onClose={() => setShowAddMoneyModal(false)}>
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-gray-500 dark:text-gray-400 font-medium">Amount (INR)</label>
+            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Amount (INR)</label>
             <input 
               type="number" 
               value={addAmount} 
               onChange={(e) => setAddAmount(e.target.value)} 
-              className="w-full mt-2 px-4 py-3 rounded-xl bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-emerald-500 shadow-sm font-bold text-lg" 
+              className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-gray-900 dark:text-white font-bold text-lg outline-none focus:border-emerald-500" 
             />
           </div>
-          <div className="flex gap-3 justify-end pt-2">
+
+          <div className="flex gap-2">
+            {[200, 500, 1000, 2500].map((val) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setAddAmount(val)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                  addAmount === val 
+                    ? 'bg-emerald-500 text-white border-emerald-500' 
+                    : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700'
+                }`}
+              >
+                ₹{val}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2.5 justify-end pt-2">
             <button 
               onClick={() => setShowAddMoneyModal(false)} 
-              className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-300 dark:border-white/10 text-gray-700 dark:text-white font-bold hover:bg-gray-200 dark:hover:bg-white/10 transition"
+              className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
             >
               Cancel
             </button>
             <button 
               onClick={submitAdd} 
-              className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md transition"
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-pointer"
             >
-              Proceed to Add
+              Confirm Top-up
             </button>
           </div>
         </div>
       </Modal>
 
       {/* Transaction History Section */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <span>📜</span> Transaction History
-        </h3>
+      <div className="space-y-3">
+        <h2 className="text-base font-bold text-gray-900 dark:text-white">Transaction History ({txList.length})</h2>
 
         {txList.length === 0 ? (
-          <div className="bg-white dark:bg-white/5 p-8 rounded-3xl text-center border border-gray-200 dark:border-white/5 shadow-sm">
-            <span className="text-4xl block mb-2 opacity-50">📂</span>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">No transactions recorded yet.</p>
+          <div className="bg-white dark:bg-slate-900/60 p-8 rounded-2xl text-center border border-gray-200 dark:border-slate-800">
+            <span className="text-3xl block mb-2 opacity-50">📂</span>
+            <p className="text-xs text-gray-500 dark:text-slate-400">No wallet transactions recorded yet.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {txList.map((t, idx) => {
               const date = t.date && t.date.toDate ? t.date.toDate() : (t.date ? new Date(t.date) : new Date());
               const isCredit = t.type === 'credit';
+              const isRefund = t.note?.toLowerCase().includes('refund');
 
               return (
-                <div key={idx} className="flex justify-between items-center bg-white dark:bg-[#0b1418]/70 border border-gray-200 dark:border-white/6 p-4 md:p-5 rounded-2xl shadow-sm hover:border-emerald-300 dark:hover:border-emerald-500/30 transition-colors">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-md border ${isCredit ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/30'}`}>
-                        {t.type || 'Transaction'}
-                      </span>
+                <div 
+                  key={idx} 
+                  className={`flex justify-between items-center bg-white dark:bg-slate-900/90 border p-3.5 rounded-2xl shadow-sm transition-colors ${
+                    isRefund 
+                      ? 'border-amber-400/40 dark:border-amber-500/30' 
+                      : 'border-gray-200/80 dark:border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl shrink-0 ${
+                      isRefund 
+                        ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+                        : isCredit 
+                        ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                        : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                    }`}>
+                      {isRefund ? <Gift size={18} /> : isCredit ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                     </div>
-                    <div className="text-gray-900 dark:text-white font-bold mt-1 text-base">{t.note || 'Wallet Update'}</div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{date.toLocaleString('en-IN')}</div>
+                    <div>
+                      <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">{t.note || 'Wallet Transfer'}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-slate-500">{date.toLocaleString('en-IN')}</p>
+                    </div>
                   </div>
-                  <div className={`text-lg md:text-xl font-black ${isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  <span className={`text-xs sm:text-sm font-black ${
+                    isCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                  }`}>
                     {isCredit ? '+' : '-'} ₹{formatPrice(t.amount)}
-                  </div>
+                  </span>
                 </div>
               );
             })}

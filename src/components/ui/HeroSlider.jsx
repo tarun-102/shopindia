@@ -1,23 +1,44 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom"; 
 import { getAllProducts } from "../../services/productservices";
+import { formatPrice } from "../../utils/priceFormatter";
+import notify from "./LuxuryToast";
+import { useDispatch } from "react-redux";
+import { addToCart } from "../../store/slices/CartSlice";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Sparkles, 
+  Flame, 
+  Zap, 
+  ShieldCheck, 
+  Truck, 
+  ArrowRight,
+  Star,
+  Clock,
+  CheckCircle2,
+  ShoppingCart
+} from "lucide-react";
 
 const HeroSlider = () => {
   const [sliderProducts, setSliderProducts] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
   const navigate = useNavigate(); 
+  const dispatch = useDispatch();
+  const timerRef = useRef(null);
 
   useEffect(() => {
     const fetchTopDiscountProducts = async () => {
       try {
         const products = await getAllProducts();
-        
-        const sortedProducts = products
-          .sort((a, b) => (Number(b.discount) || 0) - (Number(a.discount) || 0))
-          .slice(0, 5); 
-
-        setSliderProducts(sortedProducts);
+        if (products && products.length > 0) {
+          const sortedProducts = [...products]
+            .sort((a, b) => (Number(b.discount) || 0) - (Number(a.discount) || 0))
+            .slice(0, 5); 
+          setSliderProducts(sortedProducts);
+        }
       } catch (error) {
         console.error("Error fetching slider products:", error);
       }
@@ -26,152 +47,222 @@ const HeroSlider = () => {
     fetchTopDiscountProducts();
   }, []);
 
+  // Auto slide interval
   useEffect(() => {
-    if (sliderProducts.length <= 1) return; 
-    
-    const interval = setInterval(() => {
+    if (sliderProducts.length <= 1 || isPaused) return;
+
+    timerRef.current = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % sliderProducts.length);
-    }, 4000);
+    }, 5000);
 
-    return () => clearInterval(interval);
-  }, [sliderProducts.length]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [sliderProducts.length, isPaused]);
 
-  const nextSlide = () => setCurrentIndex((prev) => (prev + 1) % sliderProducts.length);
-  const prevSlide = () => setCurrentIndex((prev) => (prev === 0 ? sliderProducts.length - 1 : prev - 1));
+  const nextSlide = () => {
+    setCurrentIndex((prev) => (prev + 1) % sliderProducts.length);
+  };
+
+  const prevSlide = () => {
+    setCurrentIndex((prev) => (prev === 0 ? sliderProducts.length - 1 : prev - 1));
+  };
+
   const handleTouchStart = (event) => setTouchStartX(event.touches[0].clientX);
+  
   const handleTouchEnd = (event) => {
     if (touchStartX === null) return;
     const distance = event.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(distance) > 45) {
+    if (Math.abs(distance) > 40) {
       if (distance < 0) nextSlide();
       else prevSlide();
     }
     setTouchStartX(null);
   };
 
+  const handleInstantBuy = (product) => {
+    if (Number(product.stock || 0) <= 0) {
+      notify.error("Out of Stock", "This item is currently sold out.");
+      return;
+    }
+    dispatch(addToCart(product));
+    notify.cart(product.title, product.price);
+    navigate("/cart");
+  };
+
   if (sliderProducts.length === 0) {
-      return (
-          <div className="min-h-[350px] flex items-center justify-center bg-gray-50 rounded-[1.5rem] md:rounded-[2.5rem]">
-              <p className="text-gray-500 font-medium animate-pulse">Loading amazing deals...</p>
-          </div>
-      );
+    return (
+      <div className="w-full h-48 sm:h-64 md:h-80 rounded-2xl md:rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-slate-500/10 dark:from-slate-900 dark:to-slate-850 flex items-center justify-center border border-gray-200/80 dark:border-slate-800 animate-pulse">
+        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs sm:text-sm">
+          <Sparkles className="animate-spin" size={18} />
+          <span>Curating exclusive deals for you...</span>
+        </div>
+      </div>
+    );
   }
 
+  const currentProduct = sliderProducts[currentIndex];
+  const sellingPrice = Number(currentProduct?.price || currentProduct?.mrp || 0);
+  const mrpPrice = Number(currentProduct?.mrp || currentProduct?.price || 0);
+  const discountPercent = Number(currentProduct?.discount || 0);
+
   return (
-    <section
+    <div 
+      className="relative w-full overflow-hidden rounded-2xl md:rounded-3xl border border-emerald-500/20 dark:border-slate-800 shadow-xl transition-all duration-300 group select-none"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="bg-gradient-to-br from-orange-50 via-gray-50 to-sky-50 dark:from-[#321507] dark:via-[#111827] dark:to-[#082f49] rounded-2xl md:rounded-[2.5rem] p-3 py-4 md:p-10 shadow-xl dark:shadow-[0_10px_40px_rgba(14,165,233,0.14)] border border-orange-200/80 dark:border-orange-500/20 relative overflow-hidden transition-colors duration-500"
     >
+      {/* Background Gradient & Ambient Glows */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-teal-800 to-slate-950 dark:from-[#041a13] dark:via-[#071924] dark:to-[#090f18]"></div>
       
-      {/* Background Animated Glow */}
-      <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-orange-300/25 dark:bg-orange-500/10 blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-24 -left-16 h-64 w-64 rounded-full bg-sky-300/25 dark:bg-sky-500/10 blur-3xl pointer-events-none"></div>
+      {/* Ambient Mesh Orbs */}
+      <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-emerald-400/25 blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-amber-400/15 blur-3xl pointer-events-none"></div>
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto flex items-center justify-center">
-        
-        {/* Left Arrow (Hidden on Mobile) */}
-        <button 
-          onClick={prevSlide}
-          className="absolute left-0 z-30 p-2 md:p-3 rounded-full bg-white/40 dark:bg-black/40 hover:bg-white/70 dark:hover:bg-black/70 backdrop-blur-md text-emerald-700 dark:text-emerald-400 transition-all focus:outline-none hidden sm:block shadow-md hover:scale-110"
-        >
-          <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-        </button>
+      {/* Slide Content Layout */}
+      <div className="relative z-10 p-4 sm:p-6 md:p-8 lg:p-10 text-white min-h-[280px] sm:min-h-[320px] md:min-h-[360px] flex items-center">
+        <div className="w-full grid grid-cols-12 gap-3 sm:gap-6 md:gap-8 items-center">
+          
+          {/* Left Column: Offer Details & Buttons */}
+          <div className="col-span-7 sm:col-span-7 md:col-span-7 flex flex-col justify-center space-y-2 sm:space-y-3.5">
+            
+            {/* Top Badges */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-md">
+                <Flame size={12} className="text-red-600 animate-bounce" />
+                <span>Deal of the Day</span>
+              </span>
+              {discountPercent > 0 && (
+                <span className="inline-flex items-center px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-500 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-sm">
+                  {discountPercent}% OFF
+                </span>
+              )}
+            </div>
 
-        {/* Slides Container - Height optimized for vertical stacking on mobile */}
-        <div className="w-full relative min-h-[530px] sm:min-h-[500px] md:min-h-[390px]">
-          {sliderProducts.map((product, index) => {
-            return (
-              <div 
-                key={product.id}
-                  className={`transition-all duration-700 ease-in-out w-full flex flex-col-reverse md:flex-row items-center justify-center md:justify-between gap-3 sm:gap-8 md:gap-12 px-1 sm:px-8 md:px-16 ${
-                  index === currentIndex ? "opacity-100 translate-x-0" : "hidden"
-                }`}
-              >
-                {/* Left Side: Text Content (Niche on mobile) */}
-                <div className="text-center md:text-left w-full md:w-1/2 flex flex-col items-center md:items-start justify-center pt-1 pb-8 md:py-8 md:mt-0">
-                  
-                  {product.discount && (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 md:px-5 md:py-1.5 mb-2 md:mb-5 text-[10px] sm:text-xs md:text-sm font-black text-white bg-orange-500 rounded-md shadow-sm uppercase tracking-wide">
-                      Deal of the day · {product.discount}% off
-                    </span>
-                  )}
-                  
-                  <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black mb-1.5 md:mb-6 text-emerald-700 dark:text-emerald-300 drop-shadow-sm leading-tight capitalize px-2 md:px-0">
-                    {product.name}
-                  </h1>
-                  
-                  <p className="text-gray-600 dark:text-gray-300 font-medium tracking-wide text-xs sm:text-sm md:text-lg leading-relaxed max-w-[280px] sm:max-w-md line-clamp-2 md:line-clamp-3">
-                    {product.description || "Discover the best deals and premium quality products."}
-                  </p>
+            {/* Product Title */}
+            <h2 
+              onClick={() => navigate(`/product/${currentProduct.id}`)}
+              className="text-base sm:text-2xl md:text-3xl lg:text-4xl font-black text-white leading-tight tracking-tight line-clamp-2 cursor-pointer hover:text-emerald-300 transition-colors drop-shadow"
+            >
+              {currentProduct.title || currentProduct.name}
+            </h2>
 
-                  <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-gray-500 dark:text-gray-300 md:text-xs">
-                    <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-white">4.5 ★</span>
-                    <span>Free delivery</span>
-                    <span className="text-sky-600 dark:text-sky-300">Easy returns</span>
-                  </div>
+            {/* Short Tagline / Description */}
+            <p className="text-slate-200/90 text-xs sm:text-sm line-clamp-2 max-w-md font-medium">
+              {currentProduct.description || "Premium certified product available at guaranteed lowest price."}
+            </p>
 
-                  {product.price && (
-                    <div className="mt-2 md:mt-4 text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100">
-                      ₹{product.price}
-                    </div>
-                  )}
-
-                  <button 
-                    onClick={() => navigate(`/product/${product.id}`)}
-                    className="mt-4 md:mt-7 px-7 py-2.5 md:px-8 md:py-3 text-sm md:text-base bg-[#2874f0] hover:bg-[#1d5fca] text-white rounded-lg font-bold shadow-lg shadow-blue-500/25 transform hover:-translate-y-1 transition-all duration-300"
-                  >
-                    Buy now →
-                  </button>
-                </div>
-
-                {/* Right Side: PERFECT SHAPE IMAGE CONTAINER (Upar on mobile) */}
-                <div className="w-full md:w-1/2 flex justify-center items-center relative group cursor-pointer mt-1 md:mt-0" onClick={() => navigate(`/product/${product.id}`)}>
-                  
-                  {/* Glowing Aura */}
-                  <div className="absolute inset-0 bg-emerald-300/30 dark:bg-teal-400/20 blur-xl md:blur-2xl rounded-full scale-75 group-hover:scale-110 transition-transform duration-700"></div>
-                  
-                  {/* UNIFORM SHAPE BOX - Mobile me w-48 h-48, Desktop me w-[320px] */}
-                  <div className="relative w-40 h-40 sm:w-56 sm:h-56 md:w-[300px] md:h-[300px] bg-white/90 dark:bg-white/10 backdrop-blur-md rounded-2xl md:rounded-[3rem] border border-white/80 dark:border-gray-700 shadow-xl md:shadow-2xl flex items-center justify-center p-4 md:p-6 transition-all duration-500 group-hover:bg-white dark:group-hover:bg-gray-800/60 group-hover:shadow-sky-500/20">
-                    
-                    {/* The Image inside the perfect box */}
-                    <img 
-                      src={product.imageUrl || product.image || product.thumbnail || "https://placehold.co/400x400/png?text=No+Image"} 
-                      alt={product.name} 
-                      className="w-full h-full object-contain relative z-10 drop-shadow-[0_10px_15px_rgba(0,0,0,0.15)] md:drop-shadow-[0_15px_25px_rgba(0,0,0,0.15)] transform transition-all duration-500 ease-out group-hover:scale-110 md:group-hover:scale-125 group-hover:-rotate-3 md:group-hover:-rotate-6 group-hover:-translate-y-2 md:group-hover:-translate-y-4 group-hover:drop-shadow-[0_20px_30px_rgba(16,185,129,0.3)]"
-                    />
-                  </div>
-
-                </div>
-
+            {/* Price & Rating Display */}
+            <div className="flex flex-wrap items-baseline gap-2 sm:gap-3 pt-0.5">
+              <span className="text-xl sm:text-3xl md:text-4xl font-black text-amber-300 drop-shadow">
+                ₹{formatPrice(sellingPrice)}
+              </span>
+              {mrpPrice > sellingPrice && (
+                <span className="text-xs sm:text-base text-slate-300/80 line-through font-semibold">
+                  ₹{formatPrice(mrpPrice)}
+                </span>
+              )}
+              <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-lg text-xs font-bold text-amber-300 border border-white/10">
+                <Star size={12} fill="currentColor" />
+                <span>4.8</span>
               </div>
-            );
-          })}
+            </div>
+
+            {/* Deal Claim Meter */}
+            <div className="hidden sm:block max-w-xs space-y-1">
+              <div className="flex justify-between text-[11px] font-bold text-emerald-200">
+                <span>⚡ Selling Fast</span>
+                <span>85% Claimed</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-black/40 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 rounded-full w-[85%]"></div>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="pt-1 flex flex-wrap items-center gap-2 sm:gap-3">
+              <button
+                onClick={() => handleInstantBuy(currentProduct)}
+                className="px-4 py-2 sm:px-6 sm:py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-400/25 transition-all transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Zap size={15} className="fill-current text-slate-950" />
+                <span>Buy Now</span>
+              </button>
+
+              <button
+                onClick={() => navigate(`/product/${currentProduct.id}`)}
+                className="px-3.5 py-2 sm:px-5 sm:py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm rounded-xl border border-white/20 backdrop-blur-md transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <span>Details</span>
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+          </div>
+
+          {/* Right Column: Studio-Grade Clean Showcase Pedestal */}
+          <div 
+            onClick={() => navigate(`/product/${currentProduct.id}`)}
+            className="col-span-5 sm:col-span-5 md:col-span-5 flex justify-center items-center cursor-pointer group/img relative"
+          >
+            {/* Ambient Radial Backlight */}
+            <div className="absolute inset-0 bg-white/20 rounded-3xl blur-2xl transform group-hover/img:scale-110 transition-transform duration-500"></div>
+
+            {/* Pure Clean White Studio Frame — Eliminates awkward white JPG square border */}
+            <div className="relative w-full max-w-[140px] sm:max-w-[200px] md:max-w-[260px] aspect-square rounded-2xl sm:rounded-3xl bg-gradient-to-b from-white via-slate-50 to-gray-100 p-3 sm:p-5 shadow-2xl border-2 border-white/80 flex items-center justify-center overflow-hidden transform group-hover/img:scale-105 group-hover/img:-rotate-1 transition-all duration-500">
+              
+              {/* Quality Guarantee Tag inside showcase */}
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider shadow-sm z-10 hidden sm:block">
+                100% Genuine
+              </div>
+
+              <img
+                src={currentProduct.thumbnail || currentProduct.imageUrl || currentProduct.image || "https://placehold.co/400x400/png?text=Product"}
+                alt={currentProduct.title || currentProduct.name}
+                className="w-full h-full object-contain drop-shadow-md group-hover/img:scale-110 transition-transform duration-500"
+              />
+            </div>
+          </div>
+
         </div>
-
-        {/* Right Arrow (Hidden on Mobile) */}
-        <button 
-          onClick={nextSlide}
-          className="absolute right-0 z-30 p-2 md:p-3 rounded-full bg-white/40 dark:bg-black/40 hover:bg-white/70 dark:hover:bg-black/70 backdrop-blur-md text-emerald-700 dark:text-emerald-400 transition-all focus:outline-none hidden sm:block shadow-md hover:scale-110"
-        >
-          <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
-        </button>
-
       </div>
 
-      {/* Dots Indicator - Mobile par thoda upar rakha hai taaki button me touch na ho */}
-      <div className="mt-2 md:mt-5 flex justify-center space-x-2 md:space-x-3 relative z-30">
+      {/* Slide Navigation Arrows */}
+      <button 
+        onClick={prevSlide}
+        aria-label="Previous Slide"
+        className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md items-center justify-center transition-all opacity-0 group-hover:opacity-100 hover:scale-110 border border-white/20"
+      >
+        <ChevronLeft size={22} />
+      </button>
+
+      <button 
+        onClick={nextSlide}
+        aria-label="Next Slide"
+        className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md items-center justify-center transition-all opacity-0 group-hover:opacity-100 hover:scale-110 border border-white/20"
+      >
+        <ChevronRight size={22} />
+      </button>
+
+      {/* Indicators */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-1.5 sm:space-x-2">
         {sliderProducts.map((_, index) => (
           <button
             key={index}
             onClick={() => setCurrentIndex(index)}
-            className={`h-2 md:h-2.5 rounded-full transition-all duration-500 ${
-              index === currentIndex ? "bg-gradient-to-r from-emerald-500 to-teal-500 w-6 md:w-8 shadow-md shadow-emerald-500/50" : "bg-gray-300 dark:bg-gray-600 w-2 md:w-2.5 hover:bg-emerald-300"
+            aria-label={`Go to slide ${index + 1}`}
+            className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
+              index === currentIndex 
+                ? "w-6 sm:w-8 bg-amber-400 shadow-md" 
+                : "w-1.5 sm:w-2 bg-white/40 hover:bg-white/70"
             }`}
-          ></button>
+          />
         ))}
       </div>
-    </section>
+
+    </div>
   );
 };
 

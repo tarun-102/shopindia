@@ -1,34 +1,37 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import GlassCard from "../components/ui/GlassCard";
 import { subscribeDeliveryOrders, updateOrderStatusInDB, assignOrderToDeliveryBoy, verifyOrderOTP, regenerateOrderOTP } from "../services/productservices";
-import toast from 'react-hot-toast';
+import notify from '../components/ui/LuxuryToast';
 import Modal from '../components/ui/Modal';
+import { formatPrice } from "../utils/priceFormatter";
+import { 
+  Truck, 
+  Package, 
+  MapPin, 
+  CheckCircle2, 
+  KeyRound, 
+  RefreshCw, 
+  Clock, 
+  User,
+  ShieldAlert,
+  Split
+} from "lucide-react";
 
 const DeliveryPanel = () => {
-  // ---------------------------------------------------------------------------
-  // Component State
-  // ---------------------------------------------------------------------------
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
-  // Tab state: 'available' for incoming/active orders, 'history' for completed
   const [activeTab, setActiveTab] = useState("available"); 
-  
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
+  const [acceptingOrderId, setAcceptingOrderId] = useState(null);
   const ordersPerPage = 6;
 
-  // Authentication & Routing
   const user = useSelector((state) => state.auth.user);
   const role = useSelector((state) => state.auth.role);
   const navigate = useNavigate();
 
-  // ---------------------------------------------------------------------------
-  // Effects & Subscriptions
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!user) {
       setLoading(false);
@@ -41,7 +44,6 @@ const DeliveryPanel = () => {
       return;
     }
 
-    // Subscribe to real-time order updates
     const unsubscribe = subscribeDeliveryOrders(
       user.uid,
       (deliveryOrders) => {
@@ -63,17 +65,17 @@ const DeliveryPanel = () => {
     };
   }, [user, role, navigate]);
 
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
-
   const handleAcceptOrder = async (orderId) => {
-    if (!user?.uid) return;
+    if (!user?.uid || acceptingOrderId) return;
+    setAcceptingOrderId(orderId);
+    
     const result = await assignOrderToDeliveryBoy(orderId, user.uid);
+    setAcceptingOrderId(null);
+
     if (result.success) {
-      toast.success("Order accepted and marked Out for Delivery.");
+      notify.success("Order Accepted! 🚚", "You are assigned to deliver this package. Check details below.");
     } else {
-      toast.error(result.error || "Assignment failed. Please try again.");
+      notify.error("Assignment Failed", result.error || "Order may have been claimed by another partner.");
     }
   };
 
@@ -87,9 +89,9 @@ const DeliveryPanel = () => {
     const res = await regenerateOrderOTP(orderId, user.uid);
     setLoading(false);
     if (res.success) {
-      toast.success(`New OTP generated: ${res.otp}`);
+      notify.info("New OTP Generated 🔐", `Code: ${res.otp}`);
     } else {
-      toast.error(res.error || 'Failed to regenerate OTP');
+      notify.error("Failed", res.error || 'Could not regenerate OTP');
     }
   };
 
@@ -98,32 +100,26 @@ const DeliveryPanel = () => {
   const submitOtp = async () => {
     if (!otpModal.orderId) return;
     if (!otpModal.otp || otpModal.otp.trim().length !== 4) {
-      toast.error("Please enter a valid 4-digit OTP.");
+      notify.error("Invalid Code", "Please enter a valid 4-digit OTP provided by customer.");
       return;
     }
 
     const result = await verifyOrderOTP(otpModal.orderId, otpModal.otp.trim());
     if (result.success) {
-      toast.success("OTP verified — order marked as Delivered.");
+      notify.success("Delivery Completed! 🎉", "OTP verified and order marked as Delivered.");
       setOtpModal({ show: false, orderId: null, otp: "" });
     } else {
-      toast.error(result.error || "OTP verification failed. Delivery not completed.");
+      notify.error("Incorrect OTP", result.error || "OTP code mismatch. Please check with customer.");
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Data Filtering & Pagination
-  // ---------------------------------------------------------------------------
-  
   const filteredOrders = orders.filter((order) => {
     const status = order.status || "";
-
     if (status.toLowerCase().includes('cancel')) return false;
 
     if (activeTab === "available") {
       const isPendingOrReady = (status.includes("pending") || status.includes("Assigning") || status.includes("Confirmed") || status.includes("🟢") || status.includes("🟡")) && !order.assignedTo;
       const isMyActiveDelivery = order.assignedTo === user?.uid && !status.includes("Delivered");
-
       return isPendingOrReady || isMyActiveDelivery;
     } else {
       return order.assignedTo === user?.uid && (status.includes("Delivered") || status.includes("✅"));
@@ -133,46 +129,42 @@ const DeliveryPanel = () => {
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
   const paginatedOrders = filteredOrders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 min-h-[85vh] transition-colors duration-500">
+    <div className="space-y-6 md:space-y-8 pb-10 transition-colors duration-300">
       
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-5 rounded-2xl md:rounded-3xl shadow-sm">
         <div>
-          <h1 className="text-3xl md:text-4xl font-black uppercase tracking-widest bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-500 bg-clip-text text-transparent">
-            Delivery Portal
+          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight bg-gradient-to-r from-amber-500 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent flex items-center gap-2">
+            <Truck size={24} className="text-amber-500" />
+            <span>Delivery Partner Portal</span>
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">Manage incoming dispatches and track delivery history.</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Instant order dispatch locking & OTP customer verification.</p>
         </div>
-        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-5 py-2.5 rounded-full flex items-center gap-3 shadow-sm dark:shadow-inner">
-          <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-500/25 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            🛵
-          </div>
-          <span className="font-semibold text-sm text-gray-800 dark:text-white">{user?.email || "Delivery Partner"}</span>
+        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 text-xs font-bold shadow-sm">
+          <User size={14} />
+          <span>{user?.email}</span>
         </div>
       </div>
       
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200 dark:border-slate-800 pb-2">
         <button
           onClick={() => { setActiveTab("available"); setCurrentPage(1); }}
-          className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md ${
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
             activeTab === "available"
-              ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/20 scale-105 border border-transparent"
-              : "bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/5"
+              ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-black"
+              : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-800"
           }`}
         >
-          📦 Active Dispatches
+          📦 Active Dispatches ({orders.filter(o => !o.status?.includes("Delivered")).length})
         </button>
         <button
           onClick={() => { setActiveTab("history"); setCurrentPage(1); }}
-          className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md ${
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
             activeTab === "history"
-              ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-emerald-500/20 scale-105 border border-transparent"
-              : "bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/5"
+              ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-black"
+              : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-800"
           }`}
         >
           ✅ Delivery History
@@ -181,172 +173,169 @@ const DeliveryPanel = () => {
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="flex flex-col justify-center items-center py-24 gap-5">
-           <div className="relative flex justify-center items-center">
-              <div className="animate-spin rounded-full h-14 w-14 border-4 border-emerald-200 dark:border-emerald-500/20 border-t-emerald-600 dark:border-t-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)] dark:shadow-[0_0_15px_rgba(52,211,153,0.4)]"></div>
-              <div className="absolute w-4 h-4 bg-teal-500 dark:bg-teal-400 rounded-full animate-pulse shadow-lg shadow-teal-500/60"></div>
-           </div>
-           <span className="text-emerald-700 dark:text-emerald-400/80 text-sm font-semibold tracking-[0.2em] animate-pulse">
-              CONNECTING TO SERVER...
-           </span>
+        <div className="text-center py-16 text-xs text-amber-600 font-bold animate-pulse">
+          Connecting to delivery dispatch stream... 🛵
         </div>
       ) : error ? (
-        <div className="text-center py-10 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl">
-          <p className="text-rose-600 dark:text-rose-400 font-bold">{error}</p>
+        <div className="text-center py-8 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 text-xs font-bold">
+          {error}
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-slate-900/60 rounded-2xl border border-gray-200 dark:border-slate-800">
+          <span className="text-4xl block mb-2 opacity-60">📭</span>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">No Assignments Found</h3>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+            {activeTab === "available" ? "No orders are currently waiting for dispatch." : "No completed deliveries recorded yet."}
+          </p>
         </div>
       ) : (
-        <div className="animate-fade-in space-y-6">
-          
-          {filteredOrders.length === 0 ? (
-            <div className="text-center py-20 bg-gray-50 dark:bg-white/5 rounded-3xl border border-gray-200 dark:border-white/10 shadow-inner">
-              <span className="text-6xl block mb-4 opacity-50 grayscale">📭</span>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Records Found</h3>
-              <p className="text-gray-500 dark:text-gray-400">
-                {activeTab === "available" 
-                  ? "There are no pending dispatches available at this moment." 
-                  : "Your completed delivery history is currently empty."}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {paginatedOrders.map((order) => {
-                  const isAssignedToMe = order.assignedTo === user?.uid;
-                  const canAccept = !order.assignedTo;
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginatedOrders.map((order) => {
+              const isAssignedToMe = order.assignedTo === user?.uid;
+              const canAccept = !order.assignedTo;
+              const isBeingAccepted = acceptingOrderId === order.id;
 
-                  return (
-                    <div key={order.id} className="bg-white dark:bg-black/30 backdrop-blur-xl border border-gray-200 dark:border-white/10 p-6 rounded-3xl shadow-sm dark:shadow-xl hover:border-emerald-400 dark:hover:border-emerald-500/30 transition-colors relative overflow-hidden group">
-                      
-                      {/* Customer Info Block */}
-                      <div className="flex items-center gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-100 dark:border-white/5 mb-5 shadow-sm">
-                        <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-black text-xl shadow-inner">
-                          {(order.shipping?.name || "C").charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-gray-900 dark:text-white font-bold text-lg tracking-wide">{order.shipping?.name || "Customer"}</p>
-                          <p className="text-sm text-emerald-600 dark:text-emerald-400/80 font-medium">
-                            {order.userEmail || order.shipping?.email || `ID: ${order.userId?.substring(0,8)}...`}
-                          </p>
-                        </div>
-                      </div>
+              return (
+                <div 
+                  key={order.id} 
+                  className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm space-y-3"
+                >
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2.5">
+                    <div>
+                      <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || "Customer"}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">Order ID: {order.id}</p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      {order.status}
+                    </span>
+                  </div>
 
-                      {/* Order Details */}
-                      <div className="grid grid-cols-2 gap-4 mb-5">
-                        <div className="bg-gray-50 dark:bg-black/40 p-4 rounded-2xl border border-gray-200 dark:border-white/5">
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Order ID</p>
-                          <p className="text-sm text-gray-800 dark:text-gray-200 font-mono truncate">{order.id}</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-black/40 p-4 rounded-2xl border border-gray-200 dark:border-white/5">
-                          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Status</p>
-                          <span className={`inline-flex px-3 py-1 rounded-md text-xs font-black uppercase border ${
-                            order.status?.includes("Delivered") 
-                              ? "bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-500/30" 
-                              : "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/30"
-                          }`}>
-                            {order.status}
-                          </span>
-                        </div>
-                      </div>
+                  {/* Payment Details Pill (Showing Single or Split) */}
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl border border-gray-200/60 dark:border-slate-750">
+                    <span className="text-gray-500 dark:text-slate-400">Total Amount:</span>
+                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">₹{formatPrice(order.totalAmount)}</span>
+                    <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                      {order.paymentMethod === 'split' ? '⚡ Split Payment' : order.paymentMethod?.toUpperCase()}
+                    </span>
+                  </div>
 
-                      {/* Shipping & Items Layout */}
-                      <div className="grid sm:grid-cols-2 gap-5 mb-6">
-                        <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-bold text-sm uppercase tracking-widest">Destination</p>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-gray-50 dark:bg-white/5 p-3 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm">
-                            <p>{order.shipping?.address || "Address not provided"}</p>
-                            <p className="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">PIN: {order.shipping?.pincode || "N/A"}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-gray-900 dark:text-white font-bold text-sm uppercase tracking-widest">Package Contents</p>
-                          <div className="grid gap-2">
-                            {order.items?.map((item, idx) => (
-                              <div key={idx} className="bg-gray-50 dark:bg-white/5 p-2.5 rounded-xl text-xs text-gray-700 dark:text-gray-300 font-medium border border-gray-200 dark:border-white/5 flex items-center gap-2 truncate shadow-sm">
-                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{item.quantity || 1}×</span> 
-                                {item.title || item.name}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons Area */}
-                      <div className="pt-5 border-t border-gray-200 dark:border-white/10 flex flex-wrap justify-end gap-2">
-                        {canAccept && (
-                          <button
-                            onClick={() => handleAcceptOrder(order.id)}
-                            className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md transition-all active:scale-95"
-                          >
-                            Accept Dispatch 🚚
-                          </button>
-                        )}
-
-                        {isAssignedToMe && !order.status?.includes("Delivered") && (
-                          <button
-                            onClick={() => handleMarkDelivered(order.id)}
-                            className="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-md transition-all active:scale-95"
-                          >
-                            Confirm Delivery ✅
-                          </button>
-                        )}
-
-                        {isAssignedToMe && !order.status?.includes("Delivered") && (
-                          <button
-                            onClick={() => handleRegenerateOtp(order.id)}
-                            className="w-full sm:w-auto px-4 py-3 rounded-xl bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 text-yellow-700 dark:text-yellow-300 font-bold text-sm hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition shadow-sm"
-                          >
-                            Regenerate OTP 🔁
-                          </button>
-                        )}
-
-                        {order.status?.includes("Delivered") && (
-                          <div className="w-full sm:w-auto px-8 py-3 rounded-xl bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/30 text-teal-700 dark:text-teal-400 font-bold text-sm text-center">
-                            Completed Successfully
-                          </div>
-                        )}
+                  {/* Address Box */}
+                  <div className="space-y-1.5 text-xs text-gray-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-3 rounded-xl border border-gray-200/60 dark:border-slate-750">
+                    <div className="flex items-start gap-2">
+                      <MapPin size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-gray-800 dark:text-slate-200">{order.shipping?.address || "Address not specified"}</p>
+                        <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">PIN Code: {order.shipping?.pincode || "N/A"}</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
 
-              {/* Pagination UI */}
-              {filteredOrders.length > 0 && (
-                <div className="flex items-center justify-between px-6 py-5 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm dark:shadow-inner">
-                  <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400 font-medium">
-                    Page {currentPage} of {totalPages} <span className="hidden sm:inline">&bull; Total Records: {filteredOrders.length}</span>
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 md:px-5 py-2 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-transparent text-gray-700 dark:text-white disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-white/20 transition font-bold text-xs md:text-sm shadow-sm"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="px-4 md:px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-600 dark:to-teal-600 text-white disabled:opacity-50 hover:brightness-110 transition font-bold text-xs md:text-sm shadow-sm dark:shadow-lg"
-                    >
-                      Next
-                    </button>
+                  {/* Items List */}
+                  <div className="space-y-1 text-xs">
+                    <p className="text-[11px] font-bold text-gray-400 uppercase">Package Items:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {order.items?.map((item, idx) => (
+                        <span key={idx} className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg text-[11px] font-medium text-gray-800 dark:text-slate-200 border border-gray-200 dark:border-slate-700">
+                          {item.quantity}× {item.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100 dark:border-slate-800 flex flex-wrap justify-end gap-2">
+                    {canAccept && (
+                      <button
+                        onClick={() => handleAcceptOrder(order.id)}
+                        disabled={isBeingAccepted}
+                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isBeingAccepted ? (
+                          <>
+                            <RefreshCw size={13} className="animate-spin" />
+                            <span>Claiming...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Accept Dispatch 🚚</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {isAssignedToMe && !order.status?.includes("Delivered") && (
+                      <>
+                        <button
+                          onClick={() => handleRegenerateOtp(order.id)}
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-gray-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                        >
+                          New OTP 🔁
+                        </button>
+                        <button
+                          onClick={() => handleMarkDelivered(order.id)}
+                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-colors cursor-pointer"
+                        >
+                          Verify OTP & Deliver ✅
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-              )}
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800">
+              <span className="text-xs text-gray-500 dark:text-slate-400">Page {currentPage} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-gray-800 dark:text-white font-bold text-xs disabled:opacity-30 cursor-pointer"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs disabled:opacity-30 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
-      <Modal show={otpModal.show} title="Enter Delivery OTP" onClose={() => setOtpModal({ show: false, orderId: null, otp: "" })}>
+
+      {/* OTP Verification Modal */}
+      <Modal show={otpModal.show} title="Verify Customer OTP" onClose={() => setOtpModal({ show: false, orderId: null, otp: "" })}>
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-gray-500 dark:text-gray-400">4-digit OTP</label>
-            <input type="text" maxLength={4} value={otpModal.otp} onChange={(e) => setOtpModal(s => ({ ...s, otp: e.target.value.replace(/\D/g, '') }))} className="w-full mt-2 px-4 py-3 rounded-xl bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-emerald-500 shadow-sm" />
+            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Enter 4-digit code provided by Customer</label>
+            <input 
+              type="text" 
+              maxLength={4} 
+              value={otpModal.otp} 
+              onChange={(e) => setOtpModal(s => ({ ...s, otp: e.target.value.replace(/\D/g, '') }))} 
+              placeholder="••••"
+              className="w-full mt-2 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white font-mono text-center text-2xl font-black tracking-widest outline-none focus:border-emerald-500" 
+            />
           </div>
-          <div className="flex gap-3 justify-end">
-            <button onClick={() => setOtpModal({ show: false, orderId: null, otp: "" })} className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-300 dark:border-white/10 text-gray-700 dark:text-white font-bold">Cancel</button>
-            <button onClick={submitOtp} className="px-4 py-2 rounded-xl bg-emerald-500 text-white font-bold shadow-sm">Verify & Deliver</button>
+          <div className="flex gap-2.5 justify-end pt-2">
+            <button 
+              onClick={() => setOtpModal({ show: false, orderId: null, otp: "" })} 
+              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={submitOtp} 
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-pointer"
+            >
+              Verify & Complete Delivery
+            </button>
           </div>
         </div>
       </Modal>
