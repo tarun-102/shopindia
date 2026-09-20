@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import Loader from "../components/ui/Loader";
 import ErrorBox from "../components/ui/ErrorBox";
 import { loginUser } from "../services/auth/authService";
-import { LogIn, Sparkles } from "lucide-react";
+import notify from "../components/ui/LuxuryToast";
+import { LogIn, Zap, Lock, Mail } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ const Login = () => {
     const response = await loginUser(formData.email, formData.password);
     
     if (response.success) {
+      notify.success("Welcome Back! 👋", `Logged in as ${formData.email}`);
       if (response.role === "admin") {
         navigate("/admin");
       } else if (response.role === "deliveryboy") {
@@ -37,6 +39,7 @@ const Login = () => {
       }
     } else {
       setError(response.error);
+      notify.error("Login Failed", response.error || "Please check your email and password.");
     }
     
     setLoading(false);
@@ -44,19 +47,19 @@ const Login = () => {
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4 py-8 transition-colors duration-300">
-      <div className="p-6 sm:p-8 w-full max-w-md bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 rounded-2xl shadow-lg">
+      <div className="p-6 sm:p-9 w-full max-w-md bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-xl space-y-6">
         
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-black text-xl mx-auto mb-3 shadow-md shadow-emerald-500/20">
-            S
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-pink-500 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-indigo-500/25">
+            <Zap size={26} className="fill-white" />
           </div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Welcome Back</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Sign in to your ShopIndia account</p>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Welcome Back</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Sign in to your ShopIndia account</p>
         </div>
         
         {error && (
-          <div className="mb-4">
+          <div>
             <ErrorBox message={error} />
           </div>
         )}
@@ -67,49 +70,57 @@ const Login = () => {
           </div>
         ) : (
           <form className="space-y-4" onSubmit={handleLogin}>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">
                 Email Address
               </label>
-              <input
-                type="email"
-                name="email"
-                onChange={handleChange}
-                placeholder="name@example.com"
-                className="w-full bg-gray-50 dark:bg-slate-850 border border-gray-200 dark:border-slate-700 p-3 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500"
-                required
-              />
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-3 rounded-2xl focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+                <Mail size={16} className="text-slate-400 mr-2.5 shrink-0" />
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  className="w-full bg-transparent text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
+                  required
+                />
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">
                 Password
               </label>
-              <input
-                type="password"
-                name="password"
-                onChange={handleChange}
-                placeholder="••••••••"
-                className="w-full bg-gray-50 dark:bg-slate-850 border border-gray-200 dark:border-slate-700 p-3 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500"
-                required
-              />
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-3 rounded-2xl focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+                <Lock size={16} className="text-slate-400 mr-2.5 shrink-0" />
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className="w-full bg-transparent text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
+                  required
+                />
+              </div>
             </div>
 
             <button 
               type="submit"
-              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md shadow-emerald-500/20 text-xs sm:text-sm uppercase tracking-wider transition-all mt-2"
+              className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-3.5 rounded-2xl shadow-md shadow-indigo-500/25 text-xs sm:text-sm uppercase tracking-wider transition-all mt-2 active:scale-95 cursor-pointer"
             >
-              Sign In
+              Sign In 🚀
             </button>
           </form>
         )}
 
-        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-800 text-center">
-          <p className="text-xs text-gray-500 dark:text-slate-400">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Don't have an account?{" "}
             <Link
               to="/signup"
-              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline"
+              className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
             >
               Sign Up Free
             </Link>

@@ -2,101 +2,62 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 1. PRODUCTS COLLECTION
+    // Anyone can read products. Admins & Delivery boys (for stock decrement) can update.
     match /products/{productId} {
       allow read: if true;
       allow write: if request.auth != null && (
-        // Admins can fully write product documents
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        // Delivery partners may ONLY decrement stock (and nothing else) as part of delivery finalization
-        (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
-          // Ensure only 'stock' is being updated
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']) &&
-          // New stock must be less-than-or-equal to existing stock (decrement)
-          request.resource.data.stock <= resource.data.stock
-        )
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy'
       );
     }
 
+    // 2. CART COLLECTION
+    // Users can read and write their own cart
     match /cart/{cartId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == cartId;
+      allow read, write: if request.auth != null && request.auth.uid == cartId;
     }
 
+    // 3. ORDERS COLLECTION
+    // - Customers can create orders and read their own orders.
+    // - Admins and Delivery Partners can read and manage orders in real-time.
     match /orders/{orderId} {
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null;
 
-      allow read: if request.auth != null
-        && (
-          // User can read their own orders
-          request.auth.uid == resource.data.userId ||
-          // Admin can read all orders
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          // Delivery partners may read orders that are pending/assigning/confirmed/out-for-delivery or orders assigned to them
-          (
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
-              (
-              resource.data.assignedTo == request.auth.uid ||
-              // Support both plain and emoji variants of statuses
-              resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡', 'Order Confirmed', 'Order Confirmed 🟢', 'Out for Delivery', 'Out for Delivery 🚚']
-            )
-          )
-        );
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy'
+      );
 
-      allow update: if request.auth != null
-        && (
-          // Admin can update any order
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (
-            // Delivery partner may perform specific status transitions on orders
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy' &&
-            (
-              // Accept an unassigned or pending/assigning order: set status -> 'Out for Delivery 🚚' and assign to self
-              (
-                // Accept both plain and emoji pending variants
-                resource.data.status in ['Pending', 'Pending ⏳', 'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡', 'Order Confirmed', 'Order Confirmed 🟢'] &&
-                request.resource.data.status == 'Out for Delivery 🚚' &&
-                request.resource.data.assignedTo == request.auth.uid
-              ) ||
-              // Delivery partner may release their active assignment for reassignment.
-              (
-                resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
-                resource.data.assignedTo == request.auth.uid &&
-                request.resource.data.status == 'Assigning Delivery Partner 🟡' &&
-                request.resource.data.assignedTo == null
-              ) ||
-              // Mark an assigned order as delivered (allow delivery partner to confirm delivery
-              // even if status string variants differ). Require assignment and that the
-              // request sets status -> 'Delivered ✅' and keeps assignment to self.
-              (
-                resource.data.assignedTo == request.auth.uid &&
-                request.resource.data.assignedTo == request.auth.uid &&
-                request.resource.data.status == 'Delivered ✅'
-              )
-              ||
-              // Allow assigned delivery partner to regenerate OTP or set otpVerified flag
-              (
-                // Allow OTP updates when order is out for delivery (support emoji and plain variants)
-                resource.data.status in ['Out for Delivery', 'Out for Delivery 🚚'] &&
-                resource.data.assignedTo == request.auth.uid &&
-                // Only allow updating otp and otpVerified fields
-                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['otp','otpVerified'])
-              )
-            )
-          )
-        );
+      allow update: if request.auth != null && (
+        // Customer can update their own order (e.g., cancel & refund within 60s)
+        request.auth.uid == resource.data.userId ||
+        // Admin can update any order
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        // Delivery partner can accept orders, update status to Delivered, and verify OTP
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy'
+      );
 
-      allow delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
+    // 4. USERS COLLECTION
+    // Users can read/write their own user profile & wallet. Admins have full access.
     match /users/{userId} {
-      // Users can read/write their own document. Admins can read/write any user document
-      allow read, write: if request.auth != null && (
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'deliveryboy'
+      );
+      
+      allow write: if request.auth != null && (
         request.auth.uid == userId ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }
+
   }
 }

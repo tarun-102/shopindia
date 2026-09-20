@@ -1,5 +1,18 @@
 import { db } from "./firebase";
-import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, query, onSnapshot, runTransaction, arrayUnion } from "firebase/firestore";
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  doc, 
+  deleteDoc, 
+  getDoc, 
+  updateDoc, 
+  where, 
+  query, 
+  onSnapshot, 
+  runTransaction, 
+  arrayUnion 
+} from "firebase/firestore";
 
 // ----------------------------------------------------------------------
 // Product Management Services
@@ -7,7 +20,10 @@ import { collection, addDoc, getDocs, doc, deleteDoc, getDoc, updateDoc, where, 
 
 export const addProductToDB = async (productData) => {
     try {
-        await addDoc(collection(db, "products"), productData);
+        await addDoc(collection(db, "products"), {
+            ...productData,
+            createdAt: new Date().toISOString()
+        });
         return true;
     } catch (error) {
         console.error("Error adding product:", error);
@@ -165,7 +181,7 @@ export const getProductsByCategory = async (categoryValue) => {
 };
 
 // ----------------------------------------------------------------------
-// Order Management Services (With Split Payments & Detailed Wallet Refunds)
+// Order Management Services (With Split Payments, Live Subscriptions & Refunds)
 // ----------------------------------------------------------------------
 
 export const placeOrderInDB = async (orderData) => {
@@ -203,19 +219,20 @@ export const getUserOrders = async (userId) => {
 };
 
 export const subscribeUserOrders = (userId, onUpdate, onError) => {
-    if (!userId) throw new Error("User ID required for order subscription.");
-
-    const ordersQuery = query(collection(db, "orders"), where("userId", "==", userId));
+    if (!userId) return () => {};
+    const q = query(collection(db, "orders"), where("userId", "==", userId));
     return onSnapshot(
-        ordersQuery,
+        q,
         (snapshot) => {
-            const orders = snapshot.docs
-                .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            const orders = [];
+            snapshot.forEach((doc) => {
+                orders.push({ id: doc.id, ...doc.data() });
+            });
+            orders.sort((a, b) => new Date(b.date) - new Date(a.date));
             onUpdate(orders);
         },
         (error) => {
-            console.error("User order subscription failed:", error);
+            console.error("Error subscribing to user orders:", error);
             if (onError) onError(error);
         }
     );
@@ -240,72 +257,41 @@ export const getAllOrders = async () => {
     }
 };
 
+// Real-Time Delivery Dispatch Subscription without dropping statuses
 export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
     if (!deliveryBoyId) {
         throw new Error("Delivery personnel ID required for subscription.");
     }
 
-    const allowedStatuses = [
-        'Pending', 'Pending ⏳',
-        'Assigning Delivery Partner', 'Assigning Delivery Partner 🟡',
-        'Order Confirmed', 'Order Confirmed 🟢',
-        'Out for Delivery', 'Out for Delivery 🚚'
-    ];
+    const qAllOrders = query(collection(db, "orders"));
 
-    const qStatuses = query(collection(db, "orders"), where("status", "in", allowedStatuses));
-    const qAssigned = query(collection(db, "orders"), where("assignedTo", "==", deliveryBoyId));
-
-    const snapResults = { statuses: [], assigned: [] };
-
-    const processAndEmit = () => {
-        const combined = {};
-        for (const item of [...snapResults.statuses, ...snapResults.assigned]) {
-            combined[item.id] = item;
-        }
-        const ordersList = Object.values(combined);
-        ordersList.sort((a, b) => {
-            const aTime = new Date(a.date).getTime();
-            const bTime = new Date(b.date).getTime();
-            if (isNaN(aTime) || isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
-        onUpdate(ordersList);
-    };
-
-    const unsub1 = onSnapshot(
-        qStatuses,
+    const unsub = onSnapshot(
+        qAllOrders,
         (snapshot) => {
             const list = [];
-            snapshot.forEach((docItem) => list.push({ id: docItem.id, ...docItem.data() }));
-            snapResults.statuses = list;
-            processAndEmit();
+            snapshot.forEach((docItem) => {
+                list.push({ id: docItem.id, ...docItem.data() });
+            });
+            list.sort((a, b) => {
+                const aTime = new Date(a.date).getTime();
+                const bTime = new Date(b.date).getTime();
+                if (isNaN(aTime) || isNaN(bTime)) return 0;
+                return bTime - aTime;
+            });
+            onUpdate(list);
         },
         (error) => {
-            console.error("Order subscription (statuses) failed:", error);
-            if (onError) onError(error);
-        }
-    );
-
-    const unsub2 = onSnapshot(
-        qAssigned,
-        (snapshot) => {
-            const list = [];
-            snapshot.forEach((docItem) => list.push({ id: docItem.id, ...docItem.data() }));
-            snapResults.assigned = list;
-            processAndEmit();
-        },
-        (error) => {
-            console.error("Order subscription (assigned) failed:", error);
+            console.error("Order subscription failed:", error);
             if (onError) onError(error);
         }
     );
 
     return () => {
-        unsub1();
-        unsub2();
+        try { unsub(); } catch (e) {}
     };
 };
 
+// Atomic 1-Click Order Claiming with concurrency protection
 export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
@@ -319,17 +305,18 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
 
             const orderData = orderSnap.data();
             
-            // Atomic concurrency lock check
+            // Concurrency lock check
             if (orderData.assignedTo && orderData.assignedTo !== deliveryBoyId) {
                 throw new Error("This order was just accepted by another delivery partner!");
             }
             
-            const statusLower = String(orderData.status || '').toLowerCase();
+            const statusLower = String(orderData.status || '').toLowerCase().trim();
             if (statusLower.includes('cancel')) {
                 throw new Error('This order has been cancelled.');
             }
-            // Match the completed state only. "Delivery" and "Delivering" are not delivered.
-            if (statusLower.includes('delivered')) {
+            
+            // Strictly check for completed delivery state, NOT "delivery" in assigning/out for delivery
+            if (statusLower === 'delivered' || statusLower.startsWith('delivered') || statusLower.includes('delivered ✅')) {
                 throw new Error('This order is already delivered.');
             }
 
@@ -349,6 +336,7 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     }
 };
 
+// Cancel active delivery assignment and return to queue
 export const cancelDeliveryAssignment = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
@@ -378,7 +366,7 @@ export const cancelDeliveryAssignment = async (orderId, deliveryBoyId) => {
         return { success: true };
     } catch (error) {
         console.error("Error cancelling delivery assignment:", error);
-        return { success: false, error: error.message || "Failed to release this delivery." };
+        return { success: false, error: error.message || "Failed to release assignment." };
     }
 };
 
@@ -393,12 +381,13 @@ export const verifyOrderOTP = async (orderId, otpInput) => {
         if (!data.otp) {
             return { success: false, error: "No OTP set for this order." };
         }
-        if (String(data.otp) !== String(otpInput)) {
-            return { success: false, error: "Invalid OTP code." };
+        if (String(data.otp).trim() !== String(otpInput).trim()) {
+            return { success: false, error: "Invalid 4-digit OTP code." };
         }
 
         const updated = await updateOrderStatusInDB(orderId, "Delivered ✅");
         if (updated) {
+            await updateDoc(orderRef, { otpVerified: true, otp: null });
             return { success: true };
         }
         return { success: false, error: "Failed to mark order delivered." };
@@ -429,11 +418,11 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
             if (currentStatus.includes('cancel')) {
                 return { success: false, error: "Order is already cancelled." };
             }
-            if (currentStatus.includes('deliver') && !currentStatus.includes('partner') && !currentStatus.includes('assigning')) {
+            if (currentStatus.startsWith('delivered') || currentStatus.includes('delivered ✅')) {
                 return { success: false, error: "Delivered orders cannot be cancelled." };
             }
             if (isNaN(orderTime) || elapsedMs > 60000) {
-                return { success: false, error: "Cancellation window has expired." };
+                return { success: false, error: "Cancellation window (60s) has expired." };
             }
         }
 
@@ -451,7 +440,7 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
                 const prepaidSum = (Number(breakdown.wallet) || 0) + (Number(breakdown.upi) || 0) + (Number(breakdown.card) || 0);
                 if (prepaidSum > 0) {
                     refundAmount = prepaidSum;
-                    refundNote = `Refund: Cancelled Order #${orderId.slice(0, 6)} (Split: Wallet ₹${breakdown.wallet || 0} + UPI ₹${breakdown.upi || 0} + Card ₹${breakdown.card || 0})`;
+                    refundNote = `Refund: Cancelled Order #${orderId.slice(0, 6)} (Split Payment)`;
                 }
             } else if (paymentMethod === 'card' || paymentMethod === 'upi' || paymentMethod === 'wallet') {
                 if (totalAmount > 0) {
@@ -567,7 +556,7 @@ export const regenerateOrderOTP = async (orderId, deliveryBoyId) => {
                 throw new Error('Not assigned to this delivery partner');
             }
             if (!status.includes('out for delivery')) {
-                throw new Error('Can regenerate OTP only for orders Out for Delivery');
+                throw new Error('Can regenerate OTP only for active deliveries');
             }
 
             transaction.update(orderRef, { otp: newOtp, otpVerified: false });
