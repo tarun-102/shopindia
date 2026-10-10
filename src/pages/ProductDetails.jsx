@@ -130,11 +130,11 @@ const ProductDetails = () => {
       </div>
 
       {/* Main Product Showcase Card */}
-      <div className="bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 sm:p-7 md:p-9 shadow-sm">
+      <div className="bg-white dark:bg-[#070b14] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 sm:p-7 md:p-9 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 items-start">
           
           {/* Left Column: Product Image in Clean Studio Frame */}
-          <div className="md:col-span-5 flex items-center justify-center bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-850 rounded-3xl p-6 border border-slate-200 dark:border-slate-700/80 aspect-square shadow-inner relative group">
+          <div className="md:col-span-5 flex items-center justify-center bg-white dark:bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-700/60 aspect-square shadow-sm relative group">
             <img
               src={product.thumbnail || "https://placehold.co/500x500/png?text=Product"}
               alt={product.title}
@@ -178,7 +178,9 @@ const ProductDetails = () => {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Inclusive of all applicable taxes.</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Inclusive of {product.gstRate !== undefined ? product.gstRate : 18}% GST & all applicable taxes.
+              </p>
             </div>
 
             {/* In Stock Badge */}
@@ -199,17 +201,30 @@ const ProductDetails = () => {
 
             {/* Trust Points */}
             <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-850">
+              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
                 <Truck size={18} className="mx-auto text-indigo-500 mb-1" />
                 <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block">Free Delivery</span>
+                <span className="text-[9px] text-slate-400 block font-medium">Pan India</span>
               </div>
-              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-850">
-                <RefreshCw size={18} className="mx-auto text-cyan-500 mb-1" />
-                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block">7-Day Returns</span>
-              </div>
-              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-850">
+
+              {product.isReturnable !== false ? (
+                <div className="p-2.5 rounded-2xl bg-cyan-50/70 dark:bg-cyan-950/40 border border-cyan-200/80 dark:border-cyan-800/80">
+                  <RefreshCw size={18} className="mx-auto text-cyan-500 mb-1" />
+                  <span className="text-[10px] font-bold text-cyan-900 dark:text-cyan-200 block">7-Day Returns</span>
+                  <span className="text-[9px] text-cyan-700/80 dark:text-cyan-400 block font-medium">Replacement Policy</span>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+                  <ShieldCheck size={18} className="mx-auto text-slate-400 mb-1" />
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block">Non-Returnable</span>
+                  <span className="text-[9px] text-slate-400 block font-medium">Standard Warranty</span>
+                </div>
+              )}
+
+              <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
                 <ShieldCheck size={18} className="mx-auto text-emerald-500 mb-1" />
                 <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block">100% Genuine</span>
+                <span className="text-[9px] text-slate-400 block font-medium">Verified Brand</span>
               </div>
             </div>
 
@@ -258,7 +273,7 @@ const ProductDetails = () => {
                 value={reviewName}
                 onChange={(e) => setReviewName(e.target.value)}
                 placeholder="e.g. Rahul Sharma"
-                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-indigo-500"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-indigo-500"
                 required
               />
             </div>
@@ -268,13 +283,13 @@ const ProductDetails = () => {
               <select
                 value={rating}
                 onChange={(e) => setRating(e.target.value)}
-                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white text-xs sm:text-sm outline-none focus:border-indigo-500 cursor-pointer"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs sm:text-sm outline-none focus:border-indigo-500 cursor-pointer"
               >
-                <option value="5" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">⭐⭐⭐⭐⭐ 5 Stars (Excellent)</option>
-                <option value="4" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">⭐⭐⭐⭐ 4 Stars (Good)</option>
-                <option value="3" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">⭐⭐⭐ 3 Stars (Average)</option>
-                <option value="2" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">⭐⭐ 2 Stars (Poor)</option>
-                <option value="1" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">⭐ 1 Star (Terrible)</option>
+                <option value="5" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">⭐⭐⭐⭐⭐ 5 Stars (Excellent)</option>
+                <option value="4" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">⭐⭐⭐⭐ 4 Stars (Good)</option>
+                <option value="3" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">⭐⭐⭐ 3 Stars (Average)</option>
+                <option value="2" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">⭐⭐ 2 Stars (Poor)</option>
+                <option value="1" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">⭐ 1 Star (Terrible)</option>
               </select>
             </div>
 
@@ -285,7 +300,7 @@ const ProductDetails = () => {
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Write your thoughts on this product..."
                 rows="3"
-                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-indigo-500 resize-none"
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 text-xs sm:text-sm outline-none focus:border-indigo-500 resize-none"
                 required
               ></textarea>
             </div>
@@ -309,7 +324,7 @@ const ProductDetails = () => {
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {reviewList.map((rev, index) => (
-                <div key={index} className="p-3.5 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
+                <div key={index} className="p-3.5 bg-slate-50 dark:bg-[#0c1220] rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xs font-bold uppercase">

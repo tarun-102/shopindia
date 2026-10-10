@@ -125,11 +125,11 @@ const Home = () => {
                   onChange={(e) => setSortBy(e.target.value)}
                   className="bg-transparent font-bold text-slate-900 dark:text-white outline-none cursor-pointer text-xs"
                 >
-                  <option value="default" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Featured</option>
-                  <option value="price-low" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Price: Low to High</option>
-                  <option value="price-high" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Price: High to Low</option>
-                  <option value="discount" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Highest Discount</option>
-                  <option value="rating" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Customer Rating</option>
+                  <option value="default" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Featured</option>
+                  <option value="price-low" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Price: Low to High</option>
+                  <option value="price-high" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Price: High to Low</option>
+                  <option value="discount" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Highest Discount</option>
+                  <option value="rating" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Customer Rating</option>
                 </select>
               </div>
 
@@ -208,7 +208,7 @@ const Home = () => {
                     to={`/category/${cat.value}`}
                     className="flex flex-col items-center gap-1.5 shrink-0 group focus:outline-none"
                   >
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800 shadow-sm flex items-center justify-center p-2 group-hover:border-indigo-500 dark:group-hover:border-indigo-400 group-hover:shadow-md group-hover:scale-105 transition-all">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white dark:bg-[#070b14] border border-slate-200/90 dark:border-slate-800 shadow-sm flex items-center justify-center p-2 group-hover:border-indigo-500 dark:group-hover:border-indigo-400 group-hover:shadow-md group-hover:scale-105 transition-all">
                       {Icon ? (
                         <Icon size={24} className="text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
                       ) : (
@@ -229,7 +229,7 @@ const Home = () => {
 
           {/* 3. Trust Features Strip */}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 dark:bg-[#070b14]/90 border border-slate-200/60 dark:border-slate-800/80 shadow-sm hover:border-indigo-400/50 transition-all">
               <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
                 <Truck size={20} />
               </div>
@@ -239,17 +239,17 @@ const Home = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 dark:bg-[#070b14]/90 border border-slate-200/60 dark:border-slate-800/80 shadow-sm hover:border-emerald-400/50 transition-all">
               <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
                 <ShieldCheck size={20} />
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">100% Genuine</h4>
-                <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Directly from verified brands</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Verified authentic brands</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 dark:bg-[#070b14]/90 border border-slate-200/60 dark:border-slate-800/80 shadow-sm hover:border-amber-400/50 transition-all">
               <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
                 <RefreshCw size={20} />
               </div>
@@ -259,7 +259,7 @@ const Home = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 dark:bg-[#070b14]/90 border border-slate-200/60 dark:border-slate-800/80 shadow-sm hover:border-purple-400/50 transition-all">
               <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
                 <CreditCard size={20} />
               </div>
@@ -271,7 +271,7 @@ const Home = () => {
           </section>
 
           {/* 4. Top Selling Deals */}
-          <section className="space-y-4">
+          <section id="top-deals-section" className="space-y-4 pt-2">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400">
@@ -289,7 +289,7 @@ const Home = () => {
             {isLoadingTopProducts ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-5">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-64 rounded-3xl bg-slate-100 dark:bg-slate-850 animate-pulse"></div>
+                  <div key={i} className="h-64 rounded-3xl bg-slate-100 dark:bg-[#0c1220] animate-pulse"></div>
                 ))}
               </div>
             ) : topProducts.length > 0 ? (
@@ -347,11 +347,11 @@ const Home = () => {
                     onChange={(e) => setSortBy(e.target.value)}
                     className="bg-transparent font-bold text-slate-900 dark:text-white outline-none cursor-pointer text-xs"
                   >
-                    <option value="default" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Featured</option>
-                    <option value="price-low" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Price: Low to High</option>
-                    <option value="price-high" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Price: High to Low</option>
-                    <option value="discount" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Highest Discount</option>
-                    <option value="rating" className="bg-white dark:bg-slate-850 text-slate-900 dark:text-white">Customer Rating</option>
+                    <option value="default" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Featured</option>
+                    <option value="price-low" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Price: Low to High</option>
+                    <option value="price-high" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Price: High to Low</option>
+                    <option value="discount" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Highest Discount</option>
+                    <option value="rating" className="bg-white dark:bg-[#0c1220] text-slate-900 dark:text-white">Customer Rating</option>
                   </select>
                 </div>
               </div>

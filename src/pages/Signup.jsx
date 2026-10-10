@@ -75,7 +75,7 @@ const Signup = () => {
           <form className="space-y-3.5" onSubmit={handleSignup}>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Full Name</label>
-              <div className="flex items-center bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
                 <User size={16} className="text-slate-400 mr-2.5 shrink-0" />
                 <input 
                   type="text" 
@@ -91,7 +91,7 @@ const Signup = () => {
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Email Address</label>
-              <div className="flex items-center bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
                 <Mail size={16} className="text-slate-400 mr-2.5 shrink-0" />
                 <input 
                   type="email" 
@@ -107,7 +107,7 @@ const Signup = () => {
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Password</label>
-              <div className="flex items-center bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
                 <Lock size={16} className="text-slate-400 mr-2.5 shrink-0" />
                 <input 
                   type="password" 
@@ -123,7 +123,7 @@ const Signup = () => {
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Confirm Password</label>
-              <div className="flex items-center bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
+              <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-2xl focus-within:border-indigo-500">
                 <Lock size={16} className="text-slate-400 mr-2.5 shrink-0" />
                 <input 
                   type="password" 

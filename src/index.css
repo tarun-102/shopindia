@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --bg-gradient-dark: radial-gradient(circle at 50% 0%, #171f38 0%, #090d16 65%, #05070d 100%);
+  --bg-gradient-dark: #000000;
   --bg-gradient-light: radial-gradient(circle at 50% 0%, #eef2ff 0%, #f8fafc 45%, #f1f5f9 100%);
   --text-dark: #f8fafc;
   --text-light: #0f172a;
@@ -32,9 +32,13 @@ html:not(.dark) body {
   color: var(--text-light);
 }
 
-/* Dark theme (when .dark class present on html) */
+/* Extra Dark theme (Pitch Black AMOLED / Pure Dark) */
+html.dark {
+  color-scheme: dark;
+}
+
 html.dark body {
-  background: var(--bg-gradient-dark);
+  background: #000000;
   color: var(--text-dark);
 }
 
@@ -48,6 +52,23 @@ input,
 textarea,
 select {
   font-family: inherit;
+}
+
+/* Ensure all form inputs have proper colors and extra-dark contrast */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea,
+html.dark select {
+  color-scheme: dark;
+  background-color: #080d16;
+  color: #ffffff;
+  border-color: #1e293b;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */

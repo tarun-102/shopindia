@@ -6,7 +6,14 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        slate: {
+          750: '#1e293b',
+          850: '#111827',
+        }
+      }
+    },
   },
   plugins: [],
 }

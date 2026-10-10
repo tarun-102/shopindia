@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { addToCart, removeFromCart, clearCart } from '../store/slices/CartSlice';
 import { formatPrice } from "../utils/priceFormatter";
+import { calculateOrderTax } from "../utils/taxUtils";
 import { useNavigate, Link } from "react-router-dom";
 import { auth, db } from "../services/firebase"; 
 import { placeOrderInDB } from "../services/productservices";
@@ -22,8 +23,10 @@ import {
   CheckCircle2,
   Split,
   Sparkles,
-  Info
+  Info,
+  Download
 } from "lucide-react";
+import { downloadInvoicePDF } from "../utils/invoicePdfGenerator";
 
 const Cart = () => {
   const cartItems = useSelector((state) => state.cart.items);
@@ -52,6 +55,8 @@ const Cart = () => {
     card: 0,
     cod: 0
   });
+
+  const taxBreakdown = useMemo(() => calculateOrderTax(cartItems, totalAmount), [cartItems, totalAmount]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -217,10 +222,15 @@ const Cart = () => {
       const newOrder = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
-        items: cartItems,
+        items: cartItems.map(item => ({
+          ...item,
+          gstRate: item.gstRate !== undefined ? item.gstRate : 18,
+          isReturnable: item.isReturnable !== false
+        })),
         totalAmount: totalAmount,
         paymentMethod: paymentMethod,
         paymentBreakdown: paymentMethod === 'split' ? { ...splitAmounts } : null,
+        taxBreakdown: taxBreakdown,
         status: "Pending ⏳", 
         date: new Date().toISOString(),
         shipping: {
@@ -297,6 +307,26 @@ const Cart = () => {
             <p className="font-bold text-gray-900 dark:text-white">{placedOrderInfo?.shipping?.name}</p>
             <p className="text-gray-600 dark:text-slate-300">{placedOrderInfo?.shipping?.address} - PIN {placedOrderInfo?.shipping?.pincode}</p>
           </div>
+
+          <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-end">
+            <button
+              onClick={() => {
+                downloadInvoicePDF({
+                  id: createdOrderId,
+                  items: cartItems,
+                  totalAmount: placedOrderInfo?.totalAmount,
+                  shipping: placedOrderInfo?.shipping,
+                  paymentMethod: placedOrderInfo?.paymentMethod,
+                  date: Date.now()
+                });
+                notify.success("Tax Invoice PDF downloaded! 📥");
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+            >
+              <Download size={14} />
+              <span>Download Tax Invoice (.pdf) 📥</span>
+            </button>
+          </div>
         </div>
 
         <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-6 animate-pulse">
@@ -348,7 +378,7 @@ const Cart = () => {
                 className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 shadow-sm"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-16 h-16 bg-white dark:bg-slate-850 rounded-xl p-1.5 shrink-0 border border-gray-100 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-inner">
+                  <div className="w-16 h-16 bg-white dark:bg-white rounded-xl p-1.5 shrink-0 border border-gray-100 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm">
                     <img src={item.image || item.thumbnail} alt={item.title} className="w-full h-full object-contain" />
                   </div>
                   <div className="min-w-0 space-y-0.5">
@@ -400,7 +430,7 @@ const Cart = () => {
                   value={shippingData.name}
                   onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
                   placeholder="Full Name of Recipient" 
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-gray-200 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500" 
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500" 
                   required 
                 />
                 <textarea 
@@ -409,7 +439,7 @@ const Cart = () => {
                   onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
                   placeholder="Street, Building, Landmark..." 
                   rows="2"
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-gray-200 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 resize-none" 
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 resize-none" 
                   required 
                 ></textarea>
                 <input 
@@ -418,7 +448,7 @@ const Cart = () => {
                   value={shippingData.pincode}
                   onChange={(e) => setShippingData({ ...shippingData, [e.target.name]: e.target.value })}
                   placeholder="6-Digit Postal PIN" 
-                  className="w-full bg-slate-50 dark:bg-slate-850 border border-gray-200 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500" 
+                  className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500" 
                   required 
                 />
               </div>
@@ -445,7 +475,7 @@ const Cart = () => {
                       className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                         paymentMethod === m.id 
                           ? "bg-emerald-500 text-white border-emerald-500 shadow-md" 
-                          : "bg-slate-50 dark:bg-slate-850 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-100"
+                          : "bg-slate-50 dark:bg-[#0c1220] text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-800 hover:bg-gray-100"
                       }`}
                     >
                       {m.label}
@@ -455,7 +485,7 @@ const Cart = () => {
 
                 {/* ================= MULTI-METHOD SPLIT PAYMENT UI ================= */}
                 {paymentMethod === "split" && (
-                  <div className="bg-slate-50 dark:bg-slate-850 p-3.5 rounded-2xl border border-emerald-500/40 space-y-3 animate-fade-in">
+                  <div className="bg-slate-50 dark:bg-[#070b14] p-3.5 rounded-2xl border border-emerald-500/40 space-y-3 animate-fade-in">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                         <Split size={15} />
@@ -569,7 +599,7 @@ const Cart = () => {
 
                 {/* Card Fields (If Card or Split with Card > 0) */}
                 {(paymentMethod === "card" || (paymentMethod === "split" && splitAmounts.card > 0)) && (
-                  <div className="bg-slate-50 dark:bg-slate-850 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
                     <p className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase">Card Credentials</p>
                     <input 
                       type="text" 
@@ -577,7 +607,7 @@ const Cart = () => {
                       placeholder="Card Number (4242 4242 ...)" 
                       value={cardDetails.number}
                       onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
-                      className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-2 rounded-lg text-xs text-gray-900 dark:text-white outline-none focus:border-emerald-500"
+                      className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white outline-none focus:border-emerald-500"
                     />
                     <div className="flex gap-2">
                       <input 
@@ -586,7 +616,7 @@ const Cart = () => {
                         placeholder="MM/YY" 
                         value={cardDetails.expiry}
                         onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                        className="w-1/2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-2 rounded-lg text-xs text-gray-900 dark:text-white outline-none"
+                        className="w-1/2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white outline-none"
                       />
                       <input 
                         type="password" 
@@ -594,7 +624,7 @@ const Cart = () => {
                         placeholder="CVV" 
                         value={cardDetails.cvv}
                         onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                        className="w-1/2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-2 rounded-lg text-xs text-gray-900 dark:text-white outline-none"
+                        className="w-1/2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 p-2 rounded-lg text-xs text-slate-900 dark:text-white outline-none"
                       />
                     </div>
                   </div>
@@ -602,14 +632,14 @@ const Cart = () => {
 
                 {/* UPI Fields (If UPI or Split with UPI > 0) */}
                 {(paymentMethod === "upi" || (paymentMethod === "split" && splitAmounts.upi > 0)) && (
-                  <div className="bg-slate-50 dark:bg-slate-850 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2 text-center">
+                  <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2 text-center">
                     <p className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase text-left">UPI Identifier</p>
                     <input 
                       type="text" 
                       placeholder="Enter UPI ID (e.g. yourname@oksbi)" 
                       value={upiId}
                       onChange={(e) => setUpiId(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-2.5 rounded-lg text-xs text-gray-900 dark:text-white outline-none text-center font-semibold"
+                      className="w-full bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 p-2.5 rounded-lg text-xs text-slate-900 dark:text-white outline-none text-center font-semibold"
                     />
                   </div>
                 )}
@@ -628,11 +658,19 @@ const Cart = () => {
                 )}
               </div>
 
-              {/* Price Calculation */}
+              {/* Price Calculation with GST Breakdown */}
               <div className="border-t border-gray-100 dark:border-slate-800 pt-3 space-y-1.5 text-xs">
                 <div className="flex justify-between text-gray-500 dark:text-slate-400">
                   <span>Subtotal ({totalQuantity} items):</span>
                   <span className="font-bold text-gray-900 dark:text-white">₹{formatPrice(totalAmount)}</span>
+                </div>
+                <div className="flex justify-between text-gray-500 dark:text-slate-400">
+                  <span>Estimated Taxable Value:</span>
+                  <span className="font-mono text-gray-700 dark:text-slate-300">₹{formatPrice(taxBreakdown.taxableAmount)}</span>
+                </div>
+                <div className="flex justify-between text-indigo-600 dark:text-indigo-400 font-semibold">
+                  <span>Estimated GST (CGST + SGST Included):</span>
+                  <span className="font-mono">₹{formatPrice(taxBreakdown.totalGst)}</span>
                 </div>
                 <div className="flex justify-between text-gray-500 dark:text-slate-400">
                   <span>Standard Delivery:</span>

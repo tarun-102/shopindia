@@ -3,10 +3,13 @@ import notify from "../components/ui/LuxuryToast";
 import { useSelector } from "react-redux";
 import { 
   addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB, updateProductStock,
-  getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB 
+  getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB,
+  approveReturnInDB, rejectReturnInDB, applyDefaultGstToProducts
 } from "../services/productservices";
 import { getAllUsers } from "../services/auth/authService"; 
 import { formatPrice } from "../utils/priceFormatter";
+import { GST_RATE_OPTIONS } from "../utils/taxUtils";
+import InvoiceModal from "../components/ui/InvoiceModal";
 import { db } from "../services/firebase";
 import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { 
@@ -32,8 +35,13 @@ import {
   PieChart,
   Percent,
   SlidersHorizontal,
-  Split
+  Split,
+  FileText,
+  RefreshCw,
+  RotateCcw,
+  Download
 } from "lucide-react";
+import { downloadInvoicePDF } from "../utils/invoicePdfGenerator";
 
 export const categoriesList = [
   { id: 1, name: "Smartphones & Accessories", value: "smartphones", icon: "📱" },
@@ -75,7 +83,9 @@ const Admin = () => {
     stock: "", 
     category: "", 
     thumbnail: "", 
-    description: "" 
+    description: "",
+    gstRate: "18",
+    isReturnable: true
   });
 
   const [productsList, setProductsList] = useState([]);
@@ -83,6 +93,7 @@ const Admin = () => {
   const [usersList, setUsersList] = useState([]); 
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [gstSyncLoading, setGstSyncLoading] = useState(false);
   
   // Search & Filters
   const [orderSearchQuery, setOrderSearchQuery] = useState("");
@@ -91,8 +102,9 @@ const Admin = () => {
   const [inventoryCategory, setInventoryCategory] = useState("");
 
   const [giftModal, setGiftModal] = useState({ show: false, userId: null, userEmail: "", amount: "" });
-  const [stockModal, setStockModal] = useState({ show: false, product: null, stock: "", costPrice: "", price: "" });
+  const [stockModal, setStockModal] = useState({ show: false, product: null, stock: "", costPrice: "", price: "", gstRate: 18, isReturnable: true });
   const [confirmDialog, setConfirmDialog] = useState({ show: false, id: null, actionType: "", message: "" });
+  const [invoiceModal, setInvoiceModal] = useState({ show: false, order: null });
 
   const [productsPage, setProductsPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
@@ -345,21 +357,46 @@ const Admin = () => {
   };
 
   const handleUpdateInventoryItem = async () => {
-    const { product, stock, costPrice, price } = stockModal;
+    const { product, stock, costPrice, price, gstRate, isReturnable } = stockModal;
     if (!product) return;
 
     try {
       await updateProductInDB(product.id, {
         stock: Math.max(0, Number(stock)),
         costPrice: Number(costPrice),
-        price: Number(price)
+        price: Number(price),
+        gstRate: Number(gstRate !== undefined ? gstRate : 18),
+        isReturnable: isReturnable !== false
       });
       notify.success("Inventory Saved", `${product.title} updated successfully`);
-      setStockModal({ show: false, product: null, stock: "", costPrice: "", price: "" });
+      setStockModal({ show: false, product: null, stock: "", costPrice: "", price: "", gstRate: 18, isReturnable: true });
       fetchProducts();
     } catch (err) {
       console.error("Inventory update error:", err);
       notify.error("Failed to update inventory.");
+    }
+  };
+
+  const handleToggleReturn = async (productId, currentIsReturnable) => {
+    const nextVal = !currentIsReturnable;
+    setProductsList(prev => prev.map(p => p.id === productId ? { ...p, isReturnable: nextVal } : p));
+    const res = await updateProductInDB(productId, { isReturnable: nextVal });
+    if (res.success) {
+      notify.success("Return Policy Updated", `Product is now ${nextVal ? '7-Day Returnable 🔄' : 'Non-Returnable 🚫'}`);
+    } else {
+      notify.error("Failed to update return policy");
+      fetchProducts();
+    }
+  };
+
+  const handleQuickSetGst = async (productId, rate = 18) => {
+    setProductsList(prev => prev.map(p => p.id === productId ? { ...p, gstRate: rate } : p));
+    const res = await updateProductInDB(productId, { gstRate: rate });
+    if (res.success) {
+      notify.success("GST Assigned", `Set to ${rate}% GST successfully`);
+    } else {
+      notify.error("Failed to update GST rate");
+      fetchProducts();
     }
   };
 
@@ -385,7 +422,9 @@ const Admin = () => {
       costPrice: Number(product.costPrice || 0), 
       price: Number(product.price || 0),         
       discount: Number(product.discount || 0),   
-      stock: Number(product.stock || 0)
+      stock: Number(product.stock || 0),
+      gstRate: Number(product.gstRate !== undefined && product.gstRate !== "" ? product.gstRate : 18),
+      isReturnable: Boolean(product.isReturnable !== false)
     };
     
     if (editingId) {
@@ -398,7 +437,19 @@ const Admin = () => {
         notify.success("Product Published 🔥", `${productData.title} added to store catalog`);
       }
     }
-    setProduct({ title: "", mrp: "", costPrice: "", price: "", discount: "", stock: "", category: "", thumbnail: "", description: "" });
+    setProduct({ 
+      title: "", 
+      mrp: "", 
+      costPrice: "", 
+      price: "", 
+      discount: "", 
+      stock: "", 
+      category: "", 
+      thumbnail: "", 
+      description: "",
+      gstRate: "18",
+      isReturnable: true
+    });
     fetchProducts();
     setLoading(false);
   };
@@ -410,10 +461,45 @@ const Admin = () => {
       costPrice: item.costPrice || "", 
       price: item.price || "", 
       discount: item.discount || "", 
-      stock: item.stock || "" 
+      stock: item.stock || "",
+      gstRate: item.gstRate !== undefined ? String(item.gstRate) : "18",
+      isReturnable: item.isReturnable !== undefined ? Boolean(item.isReturnable) : true
     });
     setEditingId(item.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleApproveReturn = async (orderId) => {
+    const res = await approveReturnInDB(orderId);
+    if (res.success) {
+      notify.success("Return Approved & Refunded! 🔄", `Refund of ₹${formatPrice(res.refundAmount)} credited to customer wallet.`);
+      fetchOrders();
+      fetchProducts();
+    } else {
+      notify.error("Action Failed", res.error || "Could not approve return.");
+    }
+  };
+
+  const handleRejectReturn = async (orderId) => {
+    const res = await rejectReturnInDB(orderId);
+    if (res.success) {
+      notify.info("Return Rejected", "Order status updated.");
+      fetchOrders();
+    } else {
+      notify.error("Action Failed", res.error || "Could not reject return.");
+    }
+  };
+
+  const handleSyncAllGst = async () => {
+    setGstSyncLoading(true);
+    const res = await applyDefaultGstToProducts(18);
+    setGstSyncLoading(false);
+    if (res.success) {
+      notify.success("GST Synced! 📜", `Updated ${res.updatedCount} legacy products with 18% standard GST rate.`);
+      fetchProducts();
+    } else {
+      notify.error("Sync Failed", res.error || "Unable to sync GST.");
+    }
   };
 
   const executeConfirmAction = async () => {
@@ -436,6 +522,10 @@ const Admin = () => {
       await deleteProductFromDB(id);
       fetchProducts(); 
       notify.info("Product Deleted", "Product removed from store");
+    } else if (actionType === "APPROVE_RETURN") {
+      await handleApproveReturn(id);
+    } else if (actionType === "REJECT_RETURN") {
+      await handleRejectReturn(id);
     }
   };
 
@@ -520,6 +610,36 @@ const Admin = () => {
                   onChange={(e) => setStockModal({ ...stockModal, price: e.target.value })} 
                   className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 font-bold outline-none text-sm" 
                 />
+              </div>
+
+              {/* GST Rate & 7-Day Return Policy */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">GST Rate (%)</label>
+                  <select
+                    value={stockModal.gstRate !== undefined ? stockModal.gstRate : 18}
+                    onChange={(e) => setStockModal({ ...stockModal, gstRate: Number(e.target.value) })}
+                    className="w-full mt-1 px-3 py-2.5 rounded-xl border border-blue-300 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-300 font-bold outline-none text-xs"
+                  >
+                    <option value={0}>0% (Tax-Free)</option>
+                    <option value={5}>5% (Essential)</option>
+                    <option value={12}>12% (Standard)</option>
+                    <option value={18}>18% (Most Tech/Goods)</option>
+                    <option value={28}>28% (Luxury/Auto)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stockModal.isReturnable !== false}
+                      onChange={(e) => setStockModal({ ...stockModal, isReturnable: e.target.checked })}
+                      className="w-4 h-4 text-cyan-600 rounded"
+                    />
+                    <span className="text-[11px] font-bold text-cyan-900 dark:text-cyan-200">7-Day Return</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -854,9 +974,26 @@ const Admin = () => {
             </div>
           </div>
 
+          {/* GST & 7-Day Return Quick Status Banner */}
+          {productsList.some(p => p.gstRate === undefined || p.gstRate === null) && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={18} className="text-amber-500 shrink-0" />
+                <span>Notice: Some inventory products are missing GST rates. Apply standard 18% GST and 7-Day return with 1-click.</span>
+              </div>
+              <button
+                onClick={handleSyncAllGst}
+                disabled={gstSyncLoading}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shrink-0 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                {gstSyncLoading ? "Syncing..." : "⚡ Sync 18% GST to All"}
+              </button>
+            </div>
+          )}
+
           {/* Inventory Items Grid */}
           {filteredInventory.length === 0 ? (
-            <div className="p-10 text-center text-gray-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800">
+            <div className="p-10 text-center text-gray-400 bg-white dark:bg-[#070b14] rounded-2xl border border-gray-200 dark:border-slate-800">
               No inventory records matched your filters.
             </div>
           ) : (
@@ -865,26 +1002,59 @@ const Admin = () => {
                 const stockQty = Number(p.stock || 0);
                 const isOutOfStock = stockQty <= 0;
                 const isLowStock = stockQty > 0 && stockQty <= 10;
+                const isReturnable = p.isReturnable !== false;
+                const hasGst = p.gstRate !== undefined && p.gstRate !== null;
 
                 return (
-                  <div key={p.id} className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col justify-between gap-3">
+                  <div key={p.id} className="bg-white dark:bg-[#070b14] border border-gray-200/80 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-14 h-14 bg-white dark:bg-slate-850 rounded-xl p-1 shrink-0 border border-gray-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-inner">
+                      <div className="w-14 h-14 bg-white dark:bg-white rounded-xl p-1 shrink-0 border border-gray-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm">
                         <img src={p.thumbnail} alt={p.title} className="w-full h-full object-contain" />
                       </div>
-                      <div className="min-w-0 space-y-0.5">
+                      <div className="min-w-0 space-y-1">
                         <h4 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white truncate">{p.title}</h4>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400">
                           Selling: <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{formatPrice(p.price)}</span> | Buying: ₹{p.costPrice || 0}
                         </p>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.2 rounded text-[10px] font-black uppercase ${
-                            isOutOfStock ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200' :
-                            isLowStock ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200' :
-                            'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                        
+                        {/* Status Badges: Stock, GST, and 7-Day Return */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          {/* Stock Status */}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            isOutOfStock ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800' :
+                            isLowStock ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' :
+                            'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
                           }`}>
-                            {isOutOfStock ? 'Out of Stock (0)' : isLowStock ? `Low Stock (${stockQty})` : `In Stock: ${stockQty}`}
+                            {isOutOfStock ? 'Out of Stock' : isLowStock ? `Low (${stockQty})` : `Stock: ${stockQty}`}
                           </span>
+
+                          {/* GST Rate Badge */}
+                          {hasGst ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                              GST: {p.gstRate}%
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleQuickSetGst(p.id, 18)}
+                              className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-500 hover:text-white transition-colors cursor-pointer"
+                              title="Click to quickly assign 18% GST"
+                            >
+                              ⚠️ No GST (Set 18%)
+                            </button>
+                          )}
+
+                          {/* 7-Day Return Badge & 1-Click Toggle */}
+                          <button
+                            onClick={() => handleToggleReturn(p.id, isReturnable)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border transition-colors cursor-pointer ${
+                              isReturnable
+                                ? 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800 hover:bg-rose-50 hover:text-rose-600'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700 hover:bg-cyan-50 hover:text-cyan-700'
+                            }`}
+                            title="Click to toggle 7-Day return policy"
+                          >
+                            {isReturnable ? '🔄 7-Day Return' : '🚫 Non-Returnable'}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -915,7 +1085,15 @@ const Admin = () => {
                       </div>
 
                       <button 
-                        onClick={() => setStockModal({ show: true, product: p, stock: p.stock ?? 0, costPrice: p.costPrice || 0, price: p.price || 0 })} 
+                        onClick={() => setStockModal({ 
+                          show: true, 
+                          product: p, 
+                          stock: p.stock ?? 0, 
+                          costPrice: p.costPrice || 0, 
+                          price: p.price || 0,
+                          gstRate: p.gstRate !== undefined ? p.gstRate : 18,
+                          isReturnable: p.isReturnable !== false
+                        })} 
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm cursor-pointer"
                       >
                         Edit Details ⚙️
@@ -985,26 +1163,26 @@ const Admin = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Product Title</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Product Title</label>
                 <input 
                   type="text" 
                   value={product.title} 
                   onChange={(e) => setProduct({...product, title: e.target.value})} 
                   required 
                   placeholder="e.g. Wireless Earbuds" 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">MRP Price (₹)</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">MRP Price (₹)</label>
                 <input 
                   type="number" 
                   value={product.mrp} 
                   onChange={(e) => handlePricingChange('mrp', e.target.value)} 
                   required 
                   placeholder="e.g. 1999" 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
                 />
               </div>
 
@@ -1021,13 +1199,13 @@ const Admin = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Discount (%)</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Discount (%)</label>
                 <input 
                   type="number" 
                   value={product.discount} 
                   onChange={(e) => handlePricingChange('discount', e.target.value)} 
                   placeholder="e.g. 20" 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
                 />
               </div>
 
@@ -1044,55 +1222,96 @@ const Admin = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Stock Quantity</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Stock Quantity</label>
                 <input 
                   type="number" 
                   value={product.stock} 
                   onChange={(e) => setProduct({...product, stock: e.target.value})} 
                   required 
                   placeholder="e.g. 50" 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
                 />
               </div>
-              
+
+              {/* GST Rate Field */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Category</label>
+                <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase flex items-center gap-1">
+                  <span>GST Rate (%)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Tax Slab</span>
+                </label>
                 <select 
-                  value={product.category} 
-                  onChange={(e) => setProduct({...product, category: e.target.value})} 
-                  required 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white outline-none focus:border-emerald-500 text-xs sm:text-sm cursor-pointer"
+                  value={product.gstRate} 
+                  onChange={(e) => setProduct({...product, gstRate: e.target.value})} 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-indigo-500 text-xs sm:text-sm cursor-pointer font-bold"
                 >
-                  <option value="" disabled className="bg-white dark:bg-slate-850 text-gray-900 dark:text-white">Select Category...</option>
-                  {categoriesList.map((cat) => (
-                    <option key={cat.id} value={cat.value} className="bg-white dark:bg-slate-850 text-gray-900 dark:text-white">
-                      {cat.icon} {cat.name}
+                  {GST_RATE_OPTIONS.map((g) => (
+                    <option key={g.value} value={g.value} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                      {g.label}
                     </option>
                   ))}
                 </select>
               </div>
               
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Image URL</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Category</label>
+                <select 
+                  value={product.category} 
+                  onChange={(e) => setProduct({...product, category: e.target.value})} 
+                  required 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-xs sm:text-sm cursor-pointer"
+                >
+                  <option value="" disabled className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Select Category...</option>
+                  {categoriesList.map((cat) => (
+                    <option key={cat.id} value={cat.value} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Image URL</label>
                 <input 
                   type="text" 
                   value={product.thumbnail} 
                   onChange={(e) => setProduct({...product, thumbnail: e.target.value})} 
                   required 
                   placeholder="https://..." 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm" 
                 />
               </div>
 
+              {/* 7-Day Product Return Policy Toggle */}
+              <div className="space-y-1 sm:col-span-2 flex items-center justify-between p-3 rounded-xl border border-cyan-200 dark:border-cyan-900/50 bg-cyan-50/60 dark:bg-cyan-950/20">
+                <div className="pr-3">
+                  <span className="text-xs font-bold text-cyan-900 dark:text-cyan-300 flex items-center gap-1.5">
+                    <RefreshCw size={14} className="text-cyan-500" />
+                    <span>7-Day Easy Return Policy</span>
+                  </span>
+                  <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">
+                    Enable to allow customers 7 days replacement or instant wallet refund after delivery.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input 
+                    type="checkbox" 
+                    checked={product.isReturnable} 
+                    onChange={(e) => setProduct({...product, isReturnable: e.target.checked})}
+                    className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+
               <div className="space-y-1 sm:col-span-full">
-                <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase">Description</label>
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Description</label>
                 <textarea 
                   value={product.description} 
                   onChange={(e) => setProduct({...product, description: e.target.value})} 
                   required 
                   rows="2" 
                   placeholder="Product specifications and features..." 
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-850 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm resize-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-emerald-500 text-xs sm:text-sm resize-none"
                 ></textarea>
               </div>
             </div>
@@ -1108,7 +1327,20 @@ const Admin = () => {
 
           {/* Catalog Listing */}
           <div className="space-y-3">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">Product Catalog ({productsList.length})</h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Product Catalog ({productsList.length})</h3>
+              
+              <button
+                type="button"
+                onClick={handleSyncAllGst}
+                disabled={gstSyncLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              >
+                <FileText size={14} />
+                <span>{gstSyncLoading ? "Syncing..." : "Sync 18% GST to Legacy Products"}</span>
+              </button>
+            </div>
+
             {productsList.length === 0 ? (
                <div className="p-8 text-center text-gray-400 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800">
                  No products found.
@@ -1121,11 +1353,13 @@ const Admin = () => {
                     const costPrice = Number(item.costPrice ?? (sellingPrice * 0.5)); 
                     const profitPerItem = sellingPrice - costPrice;
                     const profitMargin = costPrice > 0 ? ((profitPerItem / costPrice) * 100).toFixed(1) : 0;
+                    const gstRate = item.gstRate !== undefined ? item.gstRate : 18;
+                    const isReturnable = item.isReturnable !== false;
 
                     return (
-                      <div key={item.id} className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center shadow-sm">
+                      <div key={item.id} className="bg-white dark:bg-[#070b14] border border-gray-200/80 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center shadow-sm">
                         <div className="flex gap-3 items-center flex-1 min-w-0">
-                          <div className="w-14 h-14 bg-white dark:bg-slate-850 rounded-xl p-1.5 flex items-center justify-center shrink-0 border border-gray-200 dark:border-slate-700 shadow-inner overflow-hidden">
+                          <div className="w-14 h-14 bg-white dark:bg-white rounded-xl p-1.5 flex items-center justify-center shrink-0 border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
                             <img src={item.thumbnail} alt={item.title} className="w-full h-full object-contain" />
                           </div>
                           <div className="space-y-0.5 min-w-0">
@@ -1134,6 +1368,16 @@ const Admin = () => {
                               <span className="bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-1.5 py-0.2 rounded font-mono">MRP: ₹{item.mrp || item.price}</span>
                               <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 rounded font-semibold">Cost: ₹{item.costPrice || 0}</span>
                               <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 rounded font-bold">Selling: ₹{formatPrice(sellingPrice)}</span>
+                              <span className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.2 rounded font-bold">
+                                {gstRate}% GST
+                              </span>
+                              <span className={`px-1.5 py-0.2 rounded font-bold border ${
+                                isReturnable 
+                                  ? "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800" 
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"
+                              }`}>
+                                {isReturnable ? "🔄 7-Day Return" : "🚫 Non-Returnable"}
+                              </span>
                             </div>
                             <p className="text-[10px] text-gray-400 dark:text-slate-500">Stock: <span className="font-bold text-gray-700 dark:text-slate-300">{item.stock || 0}</span></p>
                           </div>
@@ -1214,52 +1458,117 @@ const Admin = () => {
           ) : (
             <>
               <div className="space-y-3">
-                {paginatedOrders.map((order) => (
-                  <div key={order.id} className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center">
-                    <div className="space-y-1">
-                      <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || order.userEmail || "Customer"}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">ID: {order.id}</p>
-                      <p className="text-[11px] text-gray-500 dark:text-slate-400">Date: {new Date(order.date).toLocaleString('en-IN')}</p>
-                      
-                      {order.paymentMethod === 'split' && order.paymentBreakdown ? (
-                        <div className="flex flex-wrap gap-1 text-[10px] pt-1">
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200">
-                            ⚡ Split Payment:
-                          </span>
-                          {order.paymentBreakdown.wallet > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Wallet: ₹{order.paymentBreakdown.wallet}</span>}
-                          {order.paymentBreakdown.upi > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">UPI: ₹{order.paymentBreakdown.upi}</span>}
-                          {order.paymentBreakdown.card > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Card: ₹{order.paymentBreakdown.card}</span>}
+                {paginatedOrders.map((order) => {
+                  const isReturnRequested = String(order.status || "").includes("Return Requested");
+
+                  return (
+                    <div key={order.id} className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col justify-between gap-3">
+                      <div className="flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center">
+                        <div className="space-y-1">
+                          <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || order.userEmail || "Customer"}</p>
+                          <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">ID: {order.id}</p>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400">Date: {new Date(order.date).toLocaleString('en-IN')}</p>
+                          
+                          {order.paymentMethod === 'split' && order.paymentBreakdown ? (
+                            <div className="flex flex-wrap gap-1 text-[10px] pt-1">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200">
+                                ⚡ Split Payment:
+                              </span>
+                              {order.paymentBreakdown.wallet > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Wallet: ₹{order.paymentBreakdown.wallet}</span>}
+                              {order.paymentBreakdown.upi > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">UPI: ₹{order.paymentBreakdown.upi}</span>}
+                              {order.paymentBreakdown.card > 0 && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Card: ₹{order.paymentBreakdown.card}</span>}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-gray-400 font-bold uppercase">Method: {order.paymentMethod}</p>
+                          )}
+
+                          <p className="text-emerald-600 dark:text-emerald-400 font-black text-base mt-1">₹{formatPrice(order.totalAmount)}</p>
                         </div>
-                      ) : (
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">Method: {order.paymentMethod}</p>
-                      )}
 
-                      <p className="text-emerald-600 dark:text-emerald-400 font-black text-base mt-1">₹{formatPrice(order.totalAmount)}</p>
-                    </div>
+                        <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
+                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border ${
+                            isReturnRequested 
+                              ? "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800 animate-pulse" 
+                              : "bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                          }`}>
+                            {order.status}
+                          </span>
+                          
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              onClick={() => {
+                                downloadInvoicePDF(order);
+                                notify.success("Tax Invoice PDF downloaded! 📥");
+                              }}
+                              className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 py-1.5 px-2.5 rounded-lg font-bold text-xs hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer"
+                              title="Instant Download Official GST Tax Invoice (.pdf)"
+                            >
+                              <Download size={13} />
+                              <span>Download PDF 📥</span>
+                            </button>
 
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
-                      <span className="text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-2.5 py-1 rounded-md border border-gray-200 dark:border-slate-700">
-                        {order.status}
-                      </span>
-                      <div className="flex gap-2">
-                        {!order.status?.includes("Cancelled") && (
-                          <button 
-                            onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "CANCEL_ORDER", message: "Cancel this order and refund prepaid amount to customer wallet?"})} 
-                            className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 py-1.5 px-3 rounded-lg font-bold text-xs hover:bg-amber-500 hover:text-white transition-colors cursor-pointer"
-                          >
-                            Cancel & Refund 💰
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "DELETE_ORDER", message: "Delete this order record permanently?"})} 
-                          className="bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 py-1.5 px-3 rounded-lg font-bold text-xs hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
-                        >
-                          Delete
-                        </button>
+                            <button
+                              onClick={() => setInvoiceModal({ show: true, order })}
+                              className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 py-1.5 px-2.5 rounded-lg font-bold text-xs hover:bg-indigo-600 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <FileText size={13} />
+                              <span>View Bill 📄</span>
+                            </button>
+
+                            {!order.status?.includes("Cancelled") && !isReturnRequested && (
+                              <button 
+                                onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "CANCEL_ORDER", message: "Cancel this order and refund prepaid amount to customer wallet?"})} 
+                                className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 py-1.5 px-2.5 rounded-lg font-bold text-xs hover:bg-amber-500 hover:text-white transition-colors cursor-pointer"
+                              >
+                                Cancel 💰
+                              </button>
+                            )}
+                            
+                            <button 
+                              onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "DELETE_ORDER", message: "Delete this order record permanently?"})} 
+                              className="bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 py-1.5 px-2.5 rounded-lg font-bold text-xs hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Return Request Action Bar for Store Owner */}
+                      {isReturnRequested && (
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-cyan-50/50 dark:bg-cyan-950/20 p-2.5 rounded-xl border border-cyan-100 dark:border-cyan-900/40">
+                          <div>
+                            <span className="text-xs font-bold text-cyan-900 dark:text-cyan-300 flex items-center gap-1.5">
+                              <RotateCcw size={14} className="text-cyan-500" />
+                              <span>Customer Requested 7-Day Return:</span>
+                              <span className="font-black text-slate-800 dark:text-white">"{order.returnRequest?.reason || "Product Return"}"</span>
+                            </span>
+                            {order.returnRequest?.comment && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                Note: {order.returnRequest.comment}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setConfirmDialog({ show: true, id: order.id, actionType: "APPROVE_RETURN", message: `Approve return and refund ₹${formatPrice(order.totalAmount)} to customer wallet?` })}
+                              className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-black shadow-sm cursor-pointer"
+                            >
+                              Approve & Refund 💰
+                            </button>
+                            <button
+                              onClick={() => setConfirmDialog({ show: true, id: order.id, actionType: "REJECT_RETURN", message: "Reject this return request?" })}
+                              className="px-3 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-500 hover:text-white text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold cursor-pointer"
+                            >
+                              Reject ✖️
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {totalOrderPages > 1 && (
@@ -1355,6 +1664,14 @@ const Admin = () => {
           )}
         </div>
       )}
+
+      {/* Official Tax Invoice Modal */}
+      <InvoiceModal
+        show={invoiceModal.show}
+        onClose={() => setInvoiceModal({ show: false, order: null })}
+        order={invoiceModal.order}
+      />
+
     </div>
   );
 };

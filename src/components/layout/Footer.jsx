@@ -6,30 +6,30 @@ const Footer = () => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <footer className="hidden md:block mt-16 border-t border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-[#090d16]/70 backdrop-blur-md transition-colors">
+    <footer className="hidden md:block mt-16 border-t border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-[#000000]/95 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
         {/* Trust Badges Banner */}
         <div className="grid grid-cols-4 gap-4 pb-8 mb-8 border-b border-slate-200/80 dark:border-slate-800 text-center">
-          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
             <Truck className="text-indigo-500 mb-1" size={20} />
             <span className="text-xs font-bold text-slate-900 dark:text-white">Free Express Shipping</span>
-            <span className="text-[10px] text-slate-400">On all prepaid & COD orders</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">On all prepaid & COD orders</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
             <ShieldCheck className="text-emerald-500 mb-1" size={20} />
             <span className="text-xs font-bold text-slate-900 dark:text-white">100% Genuine Products</span>
-            <span className="text-[10px] text-slate-400">Verified manufacturer warranty</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">Verified manufacturer warranty</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
             <RefreshCw className="text-cyan-500 mb-1" size={20} />
             <span className="text-xs font-bold text-slate-900 dark:text-white">7-Day Easy Returns</span>
-            <span className="text-[10px] text-slate-400">Instant wallet credit on cancel</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">Instant wallet credit on cancel</span>
           </div>
-          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col items-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
             <Zap className="text-amber-500 mb-1" size={20} />
             <span className="text-xs font-bold text-slate-900 dark:text-white">Instant Split Checkout</span>
-            <span className="text-[10px] text-slate-400">Combine UPI + Card + Wallet</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">Combine UPI + Card + Wallet</span>
           </div>
         </div>
 
@@ -88,7 +88,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 dark:text-slate-500">
-          <p>© 2026 ShopIndia v3.0. Next-Gen Indian E-Commerce.</p>
+          <p>© 2026 ShopIndia v3.1. Next-Gen Indian E-Commerce.</p>
           <div className="flex items-center gap-1.5">
             <span>Engineered with</span>
             <Heart size={13} className="text-rose-500 fill-current" />

@@ -568,3 +568,158 @@ export const regenerateOrderOTP = async (orderId, deliveryBoyId) => {
         return { success: false, error: error.message || 'Failed to regenerate OTP' };
     }
 };
+
+// ----------------------------------------------------------------------
+// 7-Day Product Return Services (With Automated Wallet Refunds)
+// ----------------------------------------------------------------------
+
+export const requestReturnInDB = async (orderId, { reason, comment, userId }) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+
+        if (!orderSnap.exists()) {
+            return { success: false, error: "Order record not found." };
+        }
+
+        const orderData = orderSnap.data();
+        if (orderData.userId !== userId) {
+            return { success: false, error: "Unauthorized return request." };
+        }
+
+        const status = String(orderData.status || "").toLowerCase();
+        if (!status.includes("delivered")) {
+            return { success: false, error: "Only delivered orders are eligible for return." };
+        }
+
+        // Check 7-day return window (7 days = 7 * 24 * 60 * 60 * 1000 ms)
+        const orderTime = new Date(orderData.deliveredAt || orderData.date).getTime();
+        const elapsedDays = (Date.now() - orderTime) / (1000 * 60 * 60 * 24);
+        if (elapsedDays > 7) {
+            return { success: false, error: "The 7-day return window for this order has expired." };
+        }
+
+        await updateDoc(orderRef, {
+            status: "Return Requested 🔄",
+            returnRequest: {
+                reason: reason || "Quality Issue",
+                comment: comment || "",
+                requestedAt: new Date().toISOString(),
+                status: "Pending Admin Approval"
+            }
+        });
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error requesting product return:", error);
+        return { success: false, error: error.message || "Failed to submit return request." };
+    }
+};
+
+export const approveReturnInDB = async (orderId) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (!orderSnap.exists()) return { success: false, error: "Order not found." };
+
+        const orderData = orderSnap.data();
+        const userId = orderData.userId;
+        const refundAmount = Number(orderData.totalAmount || 0);
+
+        // Credit refund to customer wallet
+        if (userId && refundAmount > 0) {
+            try {
+                const userRef = doc(db, "users", userId);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    const currentWallet = userSnap.data().wallet || { balance: 0, transactions: [] };
+                    const newBalance = (currentWallet.balance || 0) + refundAmount;
+                    const refundTx = {
+                        type: "credit",
+                        amount: refundAmount,
+                        note: `Refund: 7-Day Return Approved for Order #${orderId.slice(0, 6)}`,
+                        date: new Date().toISOString()
+                    };
+                    await updateDoc(userRef, {
+                        "wallet.balance": newBalance,
+                        "wallet.transactions": arrayUnion(refundTx)
+                    });
+                }
+            } catch (wErr) {
+                console.error("Return wallet credit error:", wErr);
+            }
+        }
+
+        // Restock inventory for returned items
+        const items = orderData.items || orderData.cartItems || [];
+        for (const item of items) {
+            const pId = item.id || item.productId;
+            if (pId) {
+                try {
+                    const pRef = doc(db, "products", pId);
+                    const pSnap = await getDoc(pRef);
+                    if (pSnap.exists()) {
+                        const curStock = Number(pSnap.data().stock || 0);
+                        await updateDoc(pRef, { stock: curStock + (Number(item.quantity) || 1) });
+                    }
+                } catch (e) {}
+            }
+        }
+
+        await updateDoc(orderRef, {
+            status: "Returned & Refunded ✅",
+            refunded: true,
+            "returnRequest.status": "Approved & Refunded",
+            "returnRequest.resolvedAt": new Date().toISOString()
+        });
+
+        return { success: true, refundAmount };
+    } catch (error) {
+        console.error("Error approving return:", error);
+        return { success: false, error: error.message || "Failed to process return approval." };
+    }
+};
+
+export const rejectReturnInDB = async (orderId, rejectionReason = "Return policy criteria not met") => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        await updateDoc(orderRef, {
+            status: "Delivered (Return Rejected) ⚠️",
+            "returnRequest.status": "Rejected",
+            "returnRequest.rejectionReason": rejectionReason,
+            "returnRequest.resolvedAt": new Date().toISOString()
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error rejecting return:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ----------------------------------------------------------------------
+// GST Migration Utility (Applies default 18% GST to existing products)
+// ----------------------------------------------------------------------
+export const applyDefaultGstToProducts = async (defaultGst = 18) => {
+    try {
+        const querySnapshot = await getDocs(collection(db, "products"));
+        let updatedCount = 0;
+        for (const docItem of querySnapshot.docs) {
+            const data = docItem.data();
+            const updates = {};
+            if (data.gstRate === undefined || data.gstRate === null || data.gstRate === "") {
+                updates.gstRate = defaultGst;
+            }
+            if (data.isReturnable === undefined) {
+                updates.isReturnable = true; // Default legacy products to returnable
+            }
+            if (Object.keys(updates).length > 0) {
+                await updateDoc(doc(db, "products", docItem.id), updates);
+                updatedCount++;
+            }
+        }
+        return { success: true, updatedCount };
+    } catch (error) {
+        console.error("Error syncing default GST to products:", error);
+        return { success: false, error: error.message };
+    }
+};

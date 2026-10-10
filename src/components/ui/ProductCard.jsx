@@ -58,10 +58,10 @@ const ProductCard = ({ product }) => {
   const inStock = Number(product.stock || 0) > 0;
 
   return (
-    <div className="group relative bg-white dark:bg-[#111827] border border-slate-200/90 dark:border-slate-800/80 rounded-2xl md:rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col justify-between">
+    <div className="group relative bg-white dark:bg-[#070b14] border border-slate-200/90 dark:border-slate-800/80 rounded-2xl md:rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all duration-300 flex flex-col justify-between">
       
-      {/* Clickable Image Container */}
-      <Link to={`/product/${product.id}`} className="block relative bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-850 dark:to-slate-900 p-4 aspect-square flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800/80">
+      {/* Clickable Image Container — Clean Pure White Canvas so white JPEG photos melt seamlessly without ugly patches */}
+      <Link to={`/product/${product.id}`} className="block relative bg-white dark:bg-white p-4 aspect-square flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800/90">
         
         {/* Discount Badge */}
         {discountPercent > 0 && (
@@ -70,8 +70,15 @@ const ProductCard = ({ product }) => {
           </span>
         )}
 
+        {/* 7-Day Return Badge */}
+        {product.isReturnable !== false && (
+          <span className="absolute bottom-2.5 left-2.5 bg-cyan-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-sm z-10 flex items-center gap-1">
+            <span>🔄</span> 7D Return
+          </span>
+        )}
+
         {/* Category Pill */}
-        <span className="absolute top-2.5 right-11 bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md backdrop-blur-sm z-10 border border-slate-200/60 dark:border-slate-700 hidden sm:block">
+        <span className="absolute top-2.5 right-11 bg-slate-900/80 text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md backdrop-blur-sm z-10 hidden sm:block shadow-sm">
           {product.category || "General"}
         </span>
 

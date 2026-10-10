@@ -129,7 +129,7 @@ const Navbar = () => {
   return (
     <>
       {/* ================= DESKTOP & MOBILE APP HEADER ================= */}
-      <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#090d16]/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800/80 transition-colors duration-300 shadow-sm">
+      <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#000000]/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-slate-800/80 transition-colors duration-300 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 md:h-20 gap-3 md:gap-8">
             
@@ -207,7 +207,7 @@ const Navbar = () => {
                         <img 
                           src={item.thumbnail} 
                           alt={item.title} 
-                          className="w-10 h-10 object-contain rounded-lg bg-slate-50 dark:bg-slate-850 p-1 border border-slate-200 dark:border-slate-750 shrink-0" 
+                          className="w-10 h-10 object-contain rounded-lg bg-white dark:bg-white p-1 border border-slate-200 dark:border-slate-700 shrink-0 shadow-sm" 
                         />
                         <div className="min-w-0">
                           <p className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
@@ -428,13 +428,13 @@ const Navbar = () => {
                   <div
                     key={item.id}
                     onClick={() => handleSelectProductSuggestion(item.id)}
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer"
+                    className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#0c1220] cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <img 
                         src={item.thumbnail} 
                         alt={item.title} 
-                        className="w-8 h-8 object-contain rounded bg-slate-50 dark:bg-slate-800 p-0.5 border shrink-0" 
+                        className="w-8 h-8 object-contain rounded bg-white dark:bg-white p-0.5 border border-slate-200 dark:border-slate-700 shrink-0" 
                       />
                       <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
                         {item.title}

@@ -134,7 +134,7 @@ const Wallet = () => {
           </div>
 
           {/* Balance Capsule Box - High Contrast Dark & Light */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-slate-850 border border-emerald-200 dark:border-emerald-800/80 w-full sm:w-auto text-left sm:text-right shadow-sm">
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-[#0c1220] border border-emerald-200 dark:border-emerald-800/80 w-full sm:w-auto text-left sm:text-right shadow-sm">
             <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
               Available Balance
             </span>
@@ -178,7 +178,7 @@ const Wallet = () => {
               type="number" 
               value={addAmount} 
               onChange={(e) => setAddAmount(e.target.value)} 
-              className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-gray-900 dark:text-white font-bold text-lg outline-none focus:border-emerald-500" 
+              className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0c1220] text-gray-900 dark:text-white font-bold text-lg outline-none focus:border-emerald-500" 
             />
           </div>
 
