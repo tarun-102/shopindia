@@ -10,6 +10,7 @@ import Admin from "../pages/Admin";
 import DeliveryPanel from "../pages/DeliveryPanel";
 import Wallet from "../pages/Wallet";
 import Profile from "../pages/Profile";
+import Orders from "../pages/Orders";
 import Login from "../pages/Login";
 import Cart from "../pages/Cart";
 import ProtectedRoutes from "../components/ProtectedRoutes";
@@ -17,16 +18,19 @@ import { getAllProducts, getProductById } from "../services/productservices";
 import ProductDetails from "../pages/ProductDetails";
 import Loader from "../components/ui/Loader";
 import CategoryPage from "../pages/CategoryPage";
+import TrackOrder from "../pages/TrackOrder";
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" element={<Layout />}>
       <Route index element={<Home />}
         loader={getAllProducts}
       />
+      <Route path="track" element={<TrackOrder />} />
 
       <Route element={<ProtectedRoutes />}>
         <Route path="cart" element={<Cart />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="orders" element={<Orders />} />
         <Route path="wallet" element={<Wallet />} />
         <Route element={<ProtectedRoutes requiredRole="admin" />}>
           <Route path="admin" element={<Admin />} />

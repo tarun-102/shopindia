@@ -24,7 +24,8 @@ import {
   Split,
   Sparkles,
   Info,
-  Download
+  Download,
+  Lock
 } from "lucide-react";
 import { downloadInvoicePDF } from "../utils/invoicePdfGenerator";
 
@@ -40,7 +41,7 @@ const Cart = () => {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [createdOrderId, setCreatedOrderId] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState("card"); // 'card', 'upi', 'wallet', 'split', 'cod'
+  const [paymentMethod, setPaymentMethod] = useState("online"); // 'online', 'wallet', 'split', 'cod'
   const [placedOrderInfo, setPlacedOrderInfo] = useState(null);
   const [shippingData, setShippingData] = useState({ name: "", address: "", pincode: "" });
   
@@ -126,8 +127,8 @@ const Cart = () => {
       return;
     }
 
-    if (!shippingData.name || !shippingData.address || !shippingData.pincode) {
-      notify.error("Incomplete Address", "Please fill in all shipping details.");
+    if (!shippingData.name?.trim() || !shippingData.address?.trim() || !shippingData.pincode?.trim()) {
+      notify.error("Incomplete Address", "Please fill in recipient name, address, and postal PIN.");
       return;
     }
 
@@ -141,7 +142,7 @@ const Cart = () => {
 
     if (paymentMethod === "upi") {
       if (!upiId || !upiId.includes("@")) {
-        notify.error("Invalid UPI ID", "Please enter a valid UPI ID (e.g. username@okhdfcbank).");
+        notify.error("Invalid UPI ID", "Please enter a valid UPI ID (e.g. username@oksbi).");
         return;
       }
     }
@@ -178,7 +179,7 @@ const Cart = () => {
 
     setIsProcessing(true);
 
-    setTimeout(async () => {
+    try {
       // 1. Process Wallet Deduction (for 100% wallet or split wallet portion)
       let walletDeductAmount = 0;
       if (paymentMethod === "wallet") {
@@ -188,37 +189,33 @@ const Cart = () => {
       }
 
       if (walletDeductAmount > 0) {
-        try {
-          const userRef = doc(db, "users", currentUser.uid);
-          const userSnap = await getDoc(userRef);
-          const wallet = (userSnap.exists() && userSnap.data().wallet) || { balance: 0, transactions: [] };
-          if ((wallet.balance || 0) < walletDeductAmount) {
-            notify.error("Insufficient Balance", "Your ShopIndia wallet has insufficient funds.");
-            setIsProcessing(false);
-            return;
-          }
-          
-          const newBal = (wallet.balance || 0) - walletDeductAmount;
-          const debitTx = {
-            type: "debit",
-            amount: walletDeductAmount,
-            note: paymentMethod === 'split' ? `Order Split Payment (${new Date().toLocaleDateString()})` : `Order Payment (${new Date().toLocaleDateString()})`,
-            date: new Date().toISOString()
-          };
-
-          await updateDoc(userRef, { 
-            "wallet.balance": newBal,
-            "wallet.transactions": arrayUnion(debitTx)
-          });
-        } catch (err) {
-          console.error("Wallet deduction failed:", err);
-          notify.error("Payment Failed", "Could not process wallet deduction.");
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        const wallet = (userSnap.exists() && userSnap.data().wallet) || { balance: 0, transactions: [] };
+        if ((wallet.balance || 0) < walletDeductAmount) {
+          notify.error("Insufficient Balance", "Your ShopIndia wallet has insufficient funds.");
           setIsProcessing(false);
           return;
         }
+        
+        const newBal = (wallet.balance || 0) - walletDeductAmount;
+        const debitTx = {
+          type: "debit",
+          amount: walletDeductAmount,
+          note: paymentMethod === 'split' ? `Order Split Payment (${new Date().toLocaleDateString()})` : `Order Payment (${new Date().toLocaleDateString()})`,
+          date: new Date().toISOString()
+        };
+
+        await updateDoc(userRef, { 
+          "wallet.balance": newBal,
+          "wallet.transactions": arrayUnion(debitTx)
+        });
       }
 
-      // 2. Build Final Order Document
+      // Generate Authentic ShopIndia Prime Payment & AWB Reference
+      const paymentRef = "SIPAY_" + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+      // 2. Build Final Order Document (Stage 1: Order Confirmed)
       const newOrder = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -229,9 +226,11 @@ const Cart = () => {
         })),
         totalAmount: totalAmount,
         paymentMethod: paymentMethod,
+        paymentRef: paymentRef,
         paymentBreakdown: paymentMethod === 'split' ? { ...splitAmounts } : null,
         taxBreakdown: taxBreakdown,
-        status: "Pending ⏳", 
+        status: "Order Confirmed 📦",
+        orderStage: 1,
         date: new Date().toISOString(),
         shipping: {
           name: shippingData.name,
@@ -243,30 +242,39 @@ const Cart = () => {
 
       const orderId = await placeOrderInDB(newOrder); 
       
-      if (orderId) {
-        setCreatedOrderId(orderId);
-        setPlacedOrderInfo({
-          orderId,
-          paymentMethod,
-          paymentBreakdown: paymentMethod === 'split' ? { ...splitAmounts } : null,
-          items: cartItems,
-          totalAmount,
-          shipping: { ...shippingData },
-          createdAt: new Date().toLocaleString(),
-        });
+      if (!orderId) {
+        setIsProcessing(false);
+        notify.error("Order Creation Failed", "Could not save your order to database. Please try again.");
+        return;
       }
+
+      setCreatedOrderId(orderId);
+      setPlacedOrderInfo({
+        orderId,
+        paymentMethod,
+        paymentRef,
+        paymentBreakdown: paymentMethod === 'split' ? { ...splitAmounts } : null,
+        items: cartItems,
+        totalAmount,
+        shipping: { ...shippingData },
+        createdAt: new Date().toLocaleString(),
+      });
 
       dispatch(clearCart()); 
       setShippingData({ name: "", address: "", pincode: "" });
       setIsProcessing(false);
       setOrderSuccess(true);
-      notify.success("Order Placed Successfully! 🎉", `Order #${orderId ? orderId.slice(0,6) : ''} confirmed.`);
+      notify.success("Order Placed Successfully! 🎉", `ShopIndia Prime Ref: #${orderId.slice(0, 8)}`);
 
       setTimeout(() => {
-        navigate('/profile'); 
-      }, 3500); 
+        navigate('/orders'); 
+      }, 1800);
 
-    }, 1200); 
+    } catch (err) {
+      console.error("Order execution error:", err);
+      setIsProcessing(false);
+      notify.error("Order Failed", err.message || "An unexpected error occurred.");
+    }
   };
 
   if (orderSuccess) {
@@ -460,28 +468,51 @@ const Cart = () => {
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">100% Safe & Encrypted</span>
                 </div>
 
-                <div className="grid grid-cols-5 gap-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { id: "card", label: "Card" },
-                    { id: "upi", label: "UPI" },
-                    { id: "wallet", label: "Wallet" },
-                    { id: "split", label: "⚡ Split" },
-                    { id: "cod", label: "COD" }
+                    { id: "online", label: "⚡ ShopIndia Pay", sub: "Instant UPI / Card" },
+                    { id: "wallet", label: "👛 Wallet", sub: `₹${formatPrice(walletBalance)}` },
+                    { id: "split", label: "⚡ Split Pay", sub: "Multi-Method" },
+                    { id: "cod", label: "📦 COD", sub: "Cash on Del." }
                   ].map((m) => (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      className={`p-2.5 rounded-xl text-center border transition-all cursor-pointer ${
                         paymentMethod === m.id 
-                          ? "bg-emerald-500 text-white border-emerald-500 shadow-md" 
-                          : "bg-slate-50 dark:bg-[#0c1220] text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-800 hover:bg-gray-100"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/20 font-black" 
+                          : "bg-slate-50 dark:bg-[#0c1220] text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-800 hover:bg-gray-100 font-bold"
                       }`}
                     >
-                      {m.label}
+                      <span className="block text-xs">{m.label}</span>
+                      <span className="block text-[10px] opacity-80 mt-0.5">{m.sub}</span>
                     </button>
                   ))}
                 </div>
+
+                {/* ShopIndia Direct Gateway Callout */}
+                {paymentMethod === "online" && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50/80 dark:bg-[#071328] border border-blue-200 dark:border-blue-900/60 flex items-center justify-between text-xs animate-fade-in">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-[#0c2340] flex items-center justify-center text-white font-black text-sm shadow-sm shrink-0">
+                        ⚡
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                          <span>ShopIndia Instant Direct Pay</span>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-normal">• Bank Encrypted</span>
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Instant Authorization • UPI, Google Pay, PhonePe, Cards & NetBanking
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full shrink-0">
+                      Zero Fees
+                    </span>
+                  </div>
+                )}
 
                 {/* ================= MULTI-METHOD SPLIT PAYMENT UI ================= */}
                 {paymentMethod === "split" && (
@@ -685,9 +716,34 @@ const Cart = () => {
               <button
                 type="submit"
                 disabled={isProcessing}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
+                className={`w-full py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 ${
+                  paymentMethod === "online" 
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-500/20" 
+                    : paymentMethod === "wallet"
+                    ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20"
+                    : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
+                }`}
               >
-                {isProcessing ? "Processing Order... ⏳" : `Confirm & Pay ₹${formatPrice(totalAmount)}`}
+                {isProcessing ? (
+                  "Authorizing & Placing Order... ⏳"
+                ) : paymentMethod === "online" ? (
+                  <>
+                    <Lock size={14} />
+                    <span>Pay ₹{formatPrice(totalAmount)} via ShopIndia Pay</span>
+                  </>
+                ) : paymentMethod === "wallet" ? (
+                  <>
+                    <Wallet size={14} />
+                    <span>Pay ₹{formatPrice(totalAmount)} with Wallet</span>
+                  </>
+                ) : paymentMethod === "cod" ? (
+                  <>
+                    <Banknote size={14} />
+                    <span>Place Order with Cash on Delivery (₹{formatPrice(totalAmount)})</span>
+                  </>
+                ) : (
+                  `Confirm & Pay ₹${formatPrice(totalAmount)}`
+                )}
               </button>
 
             </form>

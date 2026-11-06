@@ -26,7 +26,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         position="top-center"
         toastOptions={{
           className: 'premium-toast',
-          duration: 3500,
+          duration: 2200,
           style: {
             background: 'rgba(15, 23, 42, 0.95)',
             color: '#ffffff',

@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { subscribeDeliveryOrders, assignOrderToDeliveryBoy, cancelDeliveryAssignment, verifyOrderOTP, regenerateOrderOTP } from "../services/productservices";
+import { 
+  subscribeDeliveryOrders, 
+  assignOrderToDeliveryBoy, 
+  cancelDeliveryAssignment, 
+  verifyOrderOTP, 
+  regenerateOrderOTP,
+  startDeliveryRun,
+  getOrderTrackingNumber,
+  getOrderCarrier
+} from "../services/productservices";
 import notify from '../components/ui/LuxuryToast';
 import Modal from '../components/ui/Modal';
 import { formatPrice } from "../utils/priceFormatter";
@@ -15,7 +24,10 @@ import {
   Clock, 
   User,
   ShieldAlert,
-  Split
+  Split,
+  Copy,
+  Navigation,
+  Loader2
 } from "lucide-react";
 
 const getOrderStatus = (order) => String(order?.status || "").toLowerCase();
@@ -28,6 +40,7 @@ const DeliveryPanel = () => {
   const [activeTab, setActiveTab] = useState("available"); 
   const [currentPage, setCurrentPage] = useState(1);
   const [acceptingOrderId, setAcceptingOrderId] = useState(null);
+  const [startingDeliveryId, setStartingDeliveryId] = useState(null);
   const [cancellingOrderId, setCancellingOrderId] = useState(null);
   const [releaseOrderId, setReleaseOrderId] = useState(null);
   const ordersPerPage = 6;
@@ -83,6 +96,20 @@ const DeliveryPanel = () => {
     }
   };
 
+  const handleStartDelivery = async (orderId) => {
+    if (!user?.uid || startingDeliveryId) return;
+    setStartingDeliveryId(orderId);
+    
+    const result = await startDeliveryRun(orderId, user.uid);
+    setStartingDeliveryId(null);
+
+    if (result.success) {
+      notify.success("Delivery Run Started! 🛵", `Order marked Out for Delivery. Customer OTP is: ${result.otp}`);
+    } else {
+      notify.error("Could Not Start Run", result.error || "Failed to mark order out for delivery.");
+    }
+  };
+
   const handleMarkDelivered = async (orderId) => {
     setOtpModal({ show: true, orderId, otp: "" });
   };
@@ -115,19 +142,29 @@ const DeliveryPanel = () => {
   };
 
   const [otpModal, setOtpModal] = useState({ show: false, orderId: null, otp: "" });
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpVerifiedSuccess, setOtpVerifiedSuccess] = useState(false);
 
   const submitOtp = async () => {
-    if (!otpModal.orderId) return;
+    if (!otpModal.orderId || isVerifyingOtp) return;
     if (!otpModal.otp || otpModal.otp.trim().length !== 4) {
       notify.error("Invalid Code", "Please enter a valid 4-digit OTP provided by customer.");
       return;
     }
 
+    setIsVerifyingOtp(true);
     const result = await verifyOrderOTP(otpModal.orderId, otpModal.otp.trim());
+    
     if (result.success) {
+      setOtpVerifiedSuccess(true);
       notify.success("Delivery Completed! 🎉", "OTP verified and order marked as Delivered.");
-      setOtpModal({ show: false, orderId: null, otp: "" });
+      setTimeout(() => {
+        setIsVerifyingOtp(false);
+        setOtpVerifiedSuccess(false);
+        setOtpModal({ show: false, orderId: null, otp: "" });
+      }, 850);
     } else {
+      setIsVerifyingOtp(false);
       notify.error("Incorrect OTP", result.error || "OTP code mismatch. Please check with customer.");
     }
   };
@@ -137,9 +174,9 @@ const DeliveryPanel = () => {
     if (status.includes('cancel')) return false;
 
     if (activeTab === "available") {
-      const isPendingOrReady = (status.includes("pending") || status.includes("assigning") || status.includes("confirmed")) && !order.assignedTo;
+      const isAvailableForPickup = (!order.assignedTo && !status.includes("delivered") && (status.includes("dispatched") || status.includes("packed") || status.includes("shipping") || status.includes("pending") || status.includes("confirmed") || status.includes("assigning")));
       const isMyActiveDelivery = order.assignedTo === user?.uid && !status.includes("delivered");
-      return isPendingOrReady || isMyActiveDelivery;
+      return isAvailableForPickup || isMyActiveDelivery;
     } else {
       return order.assignedTo === user?.uid && status.includes("delivered");
     }
@@ -158,7 +195,7 @@ const DeliveryPanel = () => {
             <Truck size={24} className="text-amber-500" />
             <span>Delivery Partner Portal</span>
           </h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Instant order dispatch locking & OTP customer verification.</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">ShopIndia Prime consignment pickup, Out for Delivery run control & customer OTP verification.</p>
         </div>
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 text-xs font-bold shadow-sm">
           <User size={14} />
@@ -176,7 +213,7 @@ const DeliveryPanel = () => {
               : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-800"
           }`}
         >
-          📦 Active Dispatches ({orders.filter((order) => order.assignedTo === user?.uid && !getOrderStatus(order).includes("delivered")).length})
+          📦 Active Deliveries & Pickup Queue ({orders.filter((order) => (!order.assignedTo && !getOrderStatus(order).includes("delivered") && (getOrderStatus(order).includes("dispatched") || getOrderStatus(order).includes("packed") || getOrderStatus(order).includes("shipping") || getOrderStatus(order).includes("confirmed"))) || (order.assignedTo === user?.uid && !getOrderStatus(order).includes("delivered"))).length})
         </button>
         <button
           onClick={() => { setActiveTab("history"); setCurrentPage(1); }}
@@ -186,7 +223,7 @@ const DeliveryPanel = () => {
               : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-800"
           }`}
         >
-          ✅ Delivery History
+          ✅ Completed Delivery History ({orders.filter((order) => order.assignedTo === user?.uid && getOrderStatus(order).includes("delivered")).length})
         </button>
       </div>
 
@@ -213,8 +250,12 @@ const DeliveryPanel = () => {
             {paginatedOrders.map((order) => {
               const isAssignedToMe = order.assignedTo === user?.uid;
               const canAccept = !order.assignedTo && !getOrderStatus(order).includes("delivered");
+              const isOutForDelivery = getOrderStatus(order).includes("out for delivery");
               const isBeingAccepted = acceptingOrderId === order.id;
               const isBeingCancelled = cancellingOrderId === order.id;
+              const isStartingRun = startingDeliveryId === order.id;
+              const trackingId = getOrderTrackingNumber(order);
+              const carrier = getOrderCarrier(order);
 
               return (
                 <div 
@@ -224,9 +265,31 @@ const DeliveryPanel = () => {
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2.5">
                     <div>
                       <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || "Customer"}</p>
-                      <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">Order ID: {order.id}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">ID: #{order.id?.slice(0, 8)}</p>
+                        <span className="text-gray-300 dark:text-slate-700">•</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(trackingId);
+                            notify.info("Tracking ID Copied! 📋", trackingId);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                          title="Click to copy AWB Tracking ID"
+                        >
+                          <Truck size={12} />
+                          <span>AWB: {trackingId}</span>
+                          <Copy size={10} />
+                        </button>
+                      </div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase border ${
+                      isOutForDelivery 
+                        ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 animate-pulse"
+                        : isAssignedToMe
+                        ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                    }`}>
                       {order.status}
                     </span>
                   </div>
@@ -268,7 +331,7 @@ const DeliveryPanel = () => {
                       <button
                         onClick={() => handleAcceptOrder(order.id)}
                         disabled={isBeingAccepted}
-                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-slate-950 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                       >
                         {isBeingAccepted ? (
                           <>
@@ -277,7 +340,8 @@ const DeliveryPanel = () => {
                           </>
                         ) : (
                           <>
-                            <span>Accept Dispatch 🚚</span>
+                            <Truck size={13} />
+                            <span>Claim & Pickup Consignment 📦</span>
                           </>
                         )}
                       </button>
@@ -285,18 +349,37 @@ const DeliveryPanel = () => {
 
                     {isAssignedToMe && !getOrderStatus(order).includes("delivered") && (
                       <>
-                        <button
-                          onClick={() => handleRegenerateOtp(order.id)}
-                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          New OTP 🔁
-                        </button>
-                        <button
-                          onClick={() => handleMarkDelivered(order.id)}
-                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-colors cursor-pointer"
-                        >
-                          Verify OTP & Deliver ✅
-                        </button>
+                        {!isOutForDelivery ? (
+                          <button
+                            onClick={() => handleStartDelivery(order.id)}
+                            disabled={isStartingRun}
+                            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs shadow-md shadow-blue-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Navigation size={13} className={isStartingRun ? "animate-spin" : ""} />
+                            <span>{isStartingRun ? "Starting Run..." : "Start Delivery Run (Mark Out for Delivery) 🛵"}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <div className="w-full mb-1 p-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-blue-800 dark:text-blue-300 text-xs flex items-center justify-between font-bold">
+                              <span className="flex items-center gap-1.5">
+                                <Navigation size={14} className="text-blue-500" />
+                                <span>🛵 Out for Delivery: Ask customer for 4-digit OTP upon arrival</span>
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleRegenerateOtp(order.id)}
+                              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                            >
+                              New OTP 🔁
+                            </button>
+                            <button
+                              onClick={() => handleMarkDelivered(order.id)}
+                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition-colors cursor-pointer"
+                            >
+                              Verify OTP & Deliver ✅
+                            </button>
+                          </>
+                        )}
                         <button
                           onClick={() => setReleaseOrderId(order.id)}
                           disabled={isBeingCancelled}
@@ -337,33 +420,83 @@ const DeliveryPanel = () => {
       )}
 
       {/* OTP Verification Modal */}
-      <Modal show={otpModal.show} title="Verify Customer OTP" onClose={() => setOtpModal({ show: false, orderId: null, otp: "" })}>
+      <Modal 
+        show={otpModal.show} 
+        title="Verify Customer Handover OTP" 
+        onClose={() => !isVerifyingOtp && setOtpModal({ show: false, orderId: null, otp: "" })}
+      >
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase">Enter 4-digit code provided by Customer</label>
-            <input 
-              type="text" 
-              maxLength={4} 
-              value={otpModal.otp} 
-              onChange={(e) => setOtpModal(s => ({ ...s, otp: e.target.value.replace(/\D/g, '') }))} 
-              placeholder="••••"
-              className="w-full mt-2 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 text-gray-900 dark:text-white font-mono text-center text-2xl font-black tracking-widest outline-none focus:border-emerald-500" 
-            />
-          </div>
-          <div className="flex gap-2.5 justify-end pt-2">
-            <button 
-              onClick={() => setOtpModal({ show: false, orderId: null, otp: "" })} 
-              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={submitOtp} 
-              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md cursor-pointer"
-            >
-              Verify & Complete Delivery
-            </button>
-          </div>
+          {otpVerifiedSuccess ? (
+            <div className="py-6 flex flex-col items-center justify-center text-center space-y-2 animate-fade-in">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-500 animate-bounce">
+                <CheckCircle2 size={36} />
+              </div>
+              <h3 className="text-base font-black text-gray-900 dark:text-white">OTP Verified Successfully!</h3>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                Order marked as Delivered & Inventory synchronized.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                  Enter 4-digit secret code from Customer
+                </label>
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4} 
+                  autoFocus
+                  disabled={isVerifyingOtp}
+                  value={otpModal.otp} 
+                  onChange={(e) => setOtpModal(s => ({ ...s, otp: e.target.value.replace(/\D/g, '') }))} 
+                  placeholder="••••"
+                  className={`w-full mt-2 px-4 py-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 border ${
+                    isVerifyingOtp 
+                      ? "border-amber-400 dark:border-amber-500 animate-pulse bg-amber-500/5" 
+                      : "border-gray-300 dark:border-slate-700"
+                  } text-gray-900 dark:text-white font-mono text-center text-3xl font-black tracking-[0.5em] outline-none focus:border-emerald-500 transition-all`} 
+                />
+              </div>
+
+              {isVerifyingOtp && (
+                <div className="flex items-center justify-center gap-2 py-1 text-xs text-amber-600 dark:text-amber-400 font-bold animate-pulse">
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Verifying OTP with ShopIndia secure database...</span>
+                </div>
+              )}
+
+              <div className="flex gap-2.5 justify-end pt-2">
+                <button 
+                  type="button"
+                  disabled={isVerifyingOtp}
+                  onClick={() => setOtpModal({ show: false, orderId: null, otp: "" })} 
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold text-xs cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button"
+                  onClick={submitOtp} 
+                  disabled={isVerifyingOtp || otpModal.otp.length !== 4}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-black text-xs shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isVerifyingOtp ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} />
+                      <span>Verify & Complete Delivery ✅</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 

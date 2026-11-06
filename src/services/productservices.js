@@ -181,19 +181,119 @@ export const getProductsByCategory = async (categoryValue) => {
 };
 
 // ----------------------------------------------------------------------
-// Order Management Services (With Split Payments, Live Subscriptions & Refunds)
+// Order Management Services (ShopIndia Prime 5-Stage Lifecycle & Live AWB Tracking)
 // ----------------------------------------------------------------------
+
+export const parseOrderTime = (dateVal) => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === "number") return dateVal;
+    if (typeof dateVal?.toDate === "function") return dateVal.toDate().getTime();
+    if (typeof dateVal?.toMillis === "function") return dateVal.toMillis();
+    
+    const str = String(dateVal).trim();
+    if (/^\d{12,14}$/.test(str)) return Number(str);
+    
+    // Handle Indian DD/MM/YYYY or DD-MM-YYYY formats with or without time (e.g. "12/10/2026, 3:57:15 pm")
+    const ddmmyyyyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[,\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?)?/i);
+    if (ddmmyyyyMatch) {
+        const day = parseInt(ddmmyyyyMatch[1], 10);
+        const month = parseInt(ddmmyyyyMatch[2], 10) - 1;
+        const year = parseInt(ddmmyyyyMatch[3], 10);
+        let hours = ddmmyyyyMatch[4] ? parseInt(ddmmyyyyMatch[4], 10) : 0;
+        const minutes = ddmmyyyyMatch[5] ? parseInt(ddmmyyyyMatch[5], 10) : 0;
+        const seconds = ddmmyyyyMatch[6] ? parseInt(ddmmyyyyMatch[6], 10) : 0;
+        const meridiem = ddmmyyyyMatch[7]?.toLowerCase();
+        if (meridiem === 'pm' && hours < 12) hours += 12;
+        if (meridiem === 'am' && hours === 12) hours = 0;
+        return new Date(year, month, day, hours, minutes, seconds).getTime();
+    }
+    
+    const t = new Date(str).getTime();
+    return isNaN(t) ? 0 : t;
+};
+
+export const generateAWBTrackingNumber = () => {
+    const timeSuffix = Date.now().toString().slice(-6);
+    const randSuffix = Math.floor(1000 + Math.random() * 9000);
+    return `SIP${timeSuffix}${randSuffix}IN`;
+};
+
+export const getOrderTrackingNumber = (order) => {
+    const raw = order?.trackingNumber;
+    if (raw && typeof raw === "string") {
+        if (raw.startsWith("FMPC")) {
+            return raw.replace(/^FMPC/, "SIP");
+        }
+        return raw;
+    }
+    if (!order?.id) return "SIP10849201IN";
+    // Deterministic hash so legacy orders have consistent AWB
+    let hash = 0;
+    for (let i = 0; i < order.id.length; i++) {
+        hash = (hash << 5) - hash + order.id.charCodeAt(i);
+        hash |= 0;
+    }
+    const cleanNum = Math.abs(hash).toString().padEnd(10, "7").slice(0, 10);
+    return `SIP${cleanNum}IN`;
+};
+
+export const formatOrderDate = (dateVal) => {
+    const ts = parseOrderTime(dateVal);
+    if (!ts) return String(dateVal || "N/A");
+    return new Date(ts).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+};
+
+export const getOrderCarrier = (order) => {
+    return "ShopIndia Prime Express";
+};
+
+export const sanitizeForFirestore = (data) => {
+    if (data === undefined) return null;
+    if (data === null || typeof data !== "object") return data;
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeForFirestore(item));
+    }
+    const cleaned = {};
+    for (const key of Object.keys(data)) {
+        const val = data[key];
+        if (val !== undefined) {
+            cleaned[key] = sanitizeForFirestore(val);
+        }
+    }
+    return cleaned;
+};
 
 export const placeOrderInDB = async (orderData) => {
     try {
+        const orderDate = orderData.date || new Date().toISOString();
+        const trackingNum = generateAWBTrackingNumber();
         const finalOrderData = {
             ...orderData,
-            status: "Pending ⏳", 
+            status: "Order Confirmed 📦", 
+            orderStage: 1, // 1: Confirmed, 2: Packed, 3: In Transit / On the Way, 4: Out for Delivery, 5: Delivered
+            trackingNumber: trackingNum,
+            carrier: "ShopIndia Prime Express",
             assignedTo: null, 
             refunded: false,
-            date: orderData.date || new Date().toISOString()
+            date: orderDate,
+            trackingTimeline: [
+                {
+                    stage: 1,
+                    title: "Order Confirmed",
+                    desc: "Order verified & confirmed by ShopIndia Fulfillment Center",
+                    time: orderDate
+                }
+            ]
         };
-        const docRef = await addDoc(collection(db, "orders"), finalOrderData);
+        const sanitized = sanitizeForFirestore(finalOrderData);
+        const docRef = await addDoc(collection(db, "orders"), sanitized);
         return docRef.id; 
     } catch (error) {
         console.error("Error creating order document:", error);
@@ -211,11 +311,29 @@ export const getUserOrders = async (userId) => {
             orders.push({ id: doc.id, ...doc.data() });
         });
         
-        return orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+        return orders.sort((a, b) => parseOrderTime(b.date) - parseOrderTime(a.date));
     } catch (error) {
         console.error("Error fetching user orders:", error);
         return [];
     }
+};
+
+export const checkAndAutoPackOrders = (ordersList) => {
+    if (!Array.isArray(ordersList)) return;
+    const now = Date.now();
+    ordersList.forEach(order => {
+        if (!order?.id) return;
+        const statusLower = String(order.status || "").toLowerCase();
+        if (statusLower.includes("cancel") || statusLower.includes("return")) return;
+        const stage = Number(order.orderStage || (statusLower.includes("packed") || statusLower.includes("shipping") ? 2 : 1));
+        if (stage === 1) {
+            const orderTime = parseOrderTime(order.date);
+            if (orderTime > 0 && (now - orderTime) >= 60000) {
+                // User requirement: 1 minute after order placed, automatically advance to Shipping Order 📦
+                markOrderPacked(order.id).catch(err => console.warn("Auto-pack error:", err));
+            }
+        }
+    });
 };
 
 export const subscribeUserOrders = (userId, onUpdate, onError) => {
@@ -228,7 +346,8 @@ export const subscribeUserOrders = (userId, onUpdate, onError) => {
             snapshot.forEach((doc) => {
                 orders.push({ id: doc.id, ...doc.data() });
             });
-            orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+            orders.sort((a, b) => parseOrderTime(b.date) - parseOrderTime(a.date));
+            checkAndAutoPackOrders(orders);
             onUpdate(orders);
         },
         (error) => {
@@ -245,16 +364,34 @@ export const getAllOrders = async () => {
         querySnapshot.forEach((docItem) => {
             orders.push({ id: docItem.id, ...docItem.data() });
         });
-        return orders.sort((a, b) => {
-            const aTime = new Date(a.date).getTime();
-            const bTime = new Date(b.date).getTime();
-            if (isNaN(aTime) || isNaN(bTime)) return 0;
-            return bTime - aTime;
-        });
+        const sorted = orders.sort((a, b) => parseOrderTime(b.date) - parseOrderTime(a.date));
+        checkAndAutoPackOrders(sorted);
+        return sorted;
     } catch (error) {
         console.error("Error fetching all orders:", error);
         return [];
     }
+};
+
+// Real-Time Live Order Stream for Admin Panel
+export const subscribeAllOrders = (onUpdate, onError) => {
+    const qAllOrders = query(collection(db, "orders"));
+    return onSnapshot(
+        qAllOrders,
+        (snapshot) => {
+            const list = [];
+            snapshot.forEach((docItem) => {
+                list.push({ id: docItem.id, ...docItem.data() });
+            });
+            list.sort((a, b) => parseOrderTime(b.date) - parseOrderTime(a.date));
+            checkAndAutoPackOrders(list);
+            onUpdate(list);
+        },
+        (error) => {
+            console.error("Admin order subscription failed:", error);
+            if (onError) onError(error);
+        }
+    );
 };
 
 // Real-Time Delivery Dispatch Subscription without dropping statuses
@@ -272,12 +409,8 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
             snapshot.forEach((docItem) => {
                 list.push({ id: docItem.id, ...docItem.data() });
             });
-            list.sort((a, b) => {
-                const aTime = new Date(a.date).getTime();
-                const bTime = new Date(b.date).getTime();
-                if (isNaN(aTime) || isNaN(bTime)) return 0;
-                return bTime - aTime;
-            });
+            list.sort((a, b) => parseOrderTime(b.date) - parseOrderTime(a.date));
+            checkAndAutoPackOrders(list);
             onUpdate(list);
         },
         (error) => {
@@ -291,11 +424,68 @@ export const subscribeDeliveryOrders = (deliveryBoyId, onUpdate, onError) => {
     };
 };
 
-// Atomic 1-Click Order Claiming with concurrency protection
+// Stage 2: Warehouse Admin packs order & generates AWB shipping label
+export const markOrderPacked = async (orderId) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (!orderSnap.exists()) return { success: false, error: "Order not found" };
+
+        const now = new Date().toISOString();
+        const event = {
+            stage: 2,
+            title: "Shipping Order",
+            desc: "Package packed and shipping initiated with ShopIndia Prime AWB label",
+            time: now
+        };
+
+        await updateDoc(orderRef, {
+            status: "Shipping Order 📦",
+            orderStage: 2,
+            packedAt: now,
+            shippingStartedAt: now,
+            trackingTimeline: arrayUnion(event)
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error marking order packed:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Stage 3: Warehouse hands over package to logistics carrier / Delivery partner
+export const markOrderDispatched = async (orderId, carrierName = "ShopIndia Prime Express") => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (!orderSnap.exists()) return { success: false, error: "Order not found" };
+
+        const now = new Date().toISOString();
+        const event = {
+            stage: 3,
+            title: "Your Order is on the Way",
+            desc: `Consignment handed over to ${carrierName}`,
+            time: now
+        };
+
+        await updateDoc(orderRef, {
+            status: "Your Order is on the Way 🚚",
+            orderStage: 3,
+            carrier: carrierName,
+            dispatchedAt: now,
+            trackingTimeline: arrayUnion(event)
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Error marking order dispatched:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Atomic 1-Click Order Claiming by Delivery Boy (Pickup consignment from Hub)
 export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     try {
         const orderRef = doc(db, "orders", orderId);
-        const otp = String(Math.floor(1000 + Math.random() * 9000));
 
         await runTransaction(db, async (transaction) => {
             const orderSnap = await transaction.get(orderRef);
@@ -315,17 +505,26 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
                 throw new Error('This order has been cancelled.');
             }
             
-            // Strictly check for completed delivery state, NOT "delivery" in assigning/out for delivery
             if (statusLower === 'delivered' || statusLower.startsWith('delivered') || statusLower.includes('delivered ✅')) {
                 throw new Error('This order is already delivered.');
             }
 
+            const now = new Date().toISOString();
+            const event = {
+                stage: 3,
+                title: "Your Order is on the Way",
+                desc: "ShopIndia Prime Delivery partner has accepted your package and is on the way",
+                time: now
+            };
+
+            const existingTimeline = orderData.trackingTimeline || [];
+
             transaction.update(orderRef, {
-                status: "Out for Delivery 🚚",
+                status: "Your Order is on the Way 🚚",
+                orderStage: 3,
                 assignedTo: deliveryBoyId,
-                otp: otp,
-                otpVerified: false,
-                acceptedAt: new Date().toISOString()
+                acceptedAt: now,
+                trackingTimeline: [...existingTimeline, event]
             });
         });
 
@@ -333,6 +532,49 @@ export const assignOrderToDeliveryBoy = async (orderId, deliveryBoyId) => {
     } catch (error) {
         console.error("Error assigning order:", error);
         return { success: false, error: error.message || "Failed to process assignment." };
+    }
+};
+
+// Stage 4: Delivery Boy explicitly triggers "Start Delivery Run / Out for Delivery"
+// This activates customer 4-digit OTP and alerts customer
+export const startDeliveryRun = async (orderId, deliveryBoyId) => {
+    try {
+        const orderRef = doc(db, "orders", orderId);
+        const otp = String(Math.floor(1000 + Math.random() * 9000));
+        const now = new Date().toISOString();
+
+        await runTransaction(db, async (transaction) => {
+            const orderSnap = await transaction.get(orderRef);
+            if (!orderSnap.exists()) throw new Error("Order not found");
+
+            const orderData = orderSnap.data();
+            if (orderData.assignedTo !== deliveryBoyId) {
+                throw new Error("Only the assigned delivery partner can initiate Out for Delivery.");
+            }
+
+            const event = {
+                stage: 4,
+                title: "Out for Delivery",
+                desc: "Delivery partner is on the way to your doorstep. Keep 4-digit OTP ready.",
+                time: now
+            };
+
+            const existingTimeline = orderData.trackingTimeline || [];
+
+            transaction.update(orderRef, {
+                status: "Out for Delivery 🛵",
+                orderStage: 4,
+                otp: otp,
+                otpVerified: false,
+                outForDeliveryAt: now,
+                trackingTimeline: [...existingTimeline, event]
+            });
+        });
+
+        return { success: true, otp };
+    } catch (error) {
+        console.error("Error starting delivery run:", error);
+        return { success: false, error: error.message || "Failed to mark out for delivery." };
     }
 };
 
@@ -476,6 +718,7 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
 
         await updateDoc(orderRef, {
             status: "Cancelled 🔴",
+            orderStage: -1,
             refunded: refundProcessed,
             cancelledAt: new Date().toISOString()
         });
@@ -494,8 +737,9 @@ export const cancelOrderInDB = async (orderId, { userId, isAdmin = false } = {})
 export const updateOrderStatusInDB = async (orderId, status) => {
     try {
         const orderRef = doc(db, "orders", orderId);
-        
-        if (status === "Delivered ✅" || status === "Delivered") {
+        const now = new Date().toISOString();
+
+        if (status === "Delivered ✅" || status === "Delivered" || status.toLowerCase().includes("delivered")) {
             await runTransaction(db, async (transaction) => {
                 const orderSnap = await transaction.get(orderRef);
                 if (!orderSnap.exists()) throw new Error("Order not found");
@@ -508,20 +752,105 @@ export const updateOrderStatusInDB = async (orderId, status) => {
                     prodSnaps.push(await transaction.get(ref));
                 }
 
-                transaction.update(orderRef, { status, otpVerified: true, otp: null });
+                const event = {
+                    stage: 5,
+                    title: "Delivered",
+                    desc: "Package delivered safely to recipient (Admin Verified - No OTP required)",
+                    time: now
+                };
+                const existingTimeline = orderData.trackingTimeline || [];
 
-                for (let i = 0; i < prodRefs.length; i++) {
-                    const item = items[i];
-                    const prodRef = prodRefs[i];
-                    const prodSnap = prodSnaps[i];
-                    if (!item || !prodSnap.exists()) continue;
-                    const currentStock = Number(prodSnap.data().stock || 0);
-                    const qty = Number(item.quantity || 1);
-                    const newStock = Math.max(0, currentStock - qty);
-                    transaction.update(prodRef, { stock: newStock });
+                transaction.update(orderRef, { 
+                    status: "Delivered ✅", 
+                    orderStage: 5,
+                    deliveredAt: now,
+                    otpVerified: true, 
+                    otp: null,
+                    trackingTimeline: [...existingTimeline, event]
+                });
+
+                // Decrement stock only once if order was not already delivered
+                const wasDelivered = String(orderData.status || '').toLowerCase().includes('delivered');
+                if (!wasDelivered) {
+                    for (let i = 0; i < prodRefs.length; i++) {
+                        const item = items[i];
+                        const prodRef = prodRefs[i];
+                        const prodSnap = prodSnaps[i];
+                        if (!item || !prodSnap.exists()) continue;
+                        const currentStock = Number(prodSnap.data().stock || 0);
+                        const qty = Number(item.quantity || 1);
+                        const newStock = Math.max(0, currentStock - qty);
+                        transaction.update(prodRef, { stock: newStock });
+                    }
                 }
             });
             return true;
+        }
+
+        if (status.includes("Out for Delivery")) {
+            const orderSnap = await getDoc(orderRef);
+            const orderData = orderSnap.data() || {};
+            const otpCode = orderData.otp || String(Math.floor(1000 + Math.random() * 9000));
+            const event = {
+                stage: 4,
+                title: "Out for Delivery",
+                desc: "Delivery partner is on the way to recipient address",
+                time: now
+            };
+            await updateDoc(orderRef, {
+                status: "Out for Delivery 🛵",
+                orderStage: 4,
+                outForDeliveryAt: now,
+                otp: otpCode,
+                trackingTimeline: arrayUnion(event)
+            });
+            return true;
+        }
+
+        if (status.includes("Way") || status.includes("Dispatched")) {
+            const event = {
+                stage: 3,
+                title: "Your Order is on the Way",
+                desc: "Consignment in transit with ShopIndia Prime Express",
+                time: now
+            };
+            await updateDoc(orderRef, {
+                status: "Your Order is on the Way 🚚",
+                orderStage: 3,
+                dispatchedAt: now,
+                trackingTimeline: arrayUnion(event)
+            });
+            return true;
+        }
+
+        if (status.includes("Shipping") || status.includes("Packed")) {
+            const event = {
+                stage: 2,
+                title: "Shipping Order",
+                desc: "Package prepared and official AWB shipping label attached",
+                time: now
+            };
+            await updateDoc(orderRef, {
+                status: "Shipping Order 📦",
+                orderStage: 2,
+                packedAt: now,
+                shippingStartedAt: now,
+                trackingTimeline: arrayUnion(event)
+            });
+            return true;
+        }
+
+        if (status.includes("Confirmed") || status.includes("Pending")) {
+            await updateDoc(orderRef, {
+                status: "Order Confirmed 📦",
+                orderStage: 1
+            });
+            return true;
+        }
+
+        if (status.includes("Cancel")) {
+            const res = await cancelOrderInDB(orderId, { isAdmin: true });
+            return res.success;
         }
 
         await updateDoc(orderRef, { status });
@@ -697,20 +1026,36 @@ export const rejectReturnInDB = async (orderId, rejectionReason = "Return policy
 };
 
 // ----------------------------------------------------------------------
-// GST Migration Utility (Applies default 18% GST to existing products)
+// Category-Aware GST Migration Utility (Food: 5%, Apparel: 12%, Tech: 18%)
 // ----------------------------------------------------------------------
-export const applyDefaultGstToProducts = async (defaultGst = 18) => {
+export const applyDefaultGstToProducts = async (forceReassign = false) => {
     try {
         const querySnapshot = await getDocs(collection(db, "products"));
         let updatedCount = 0;
         for (const docItem of querySnapshot.docs) {
             const data = docItem.data();
             const updates = {};
-            if (data.gstRate === undefined || data.gstRate === null || data.gstRate === "") {
-                updates.gstRate = defaultGst;
+
+            const cat = String(data.category || "").toLowerCase();
+            let suggestedRate = 18;
+            let suggestedHsn = "8517";
+            if (cat.includes("grocer") || cat.includes("food") || cat.includes("fruit") || cat.includes("spice") || cat.includes("snack")) {
+                suggestedRate = 5;
+                suggestedHsn = "1905";
+            } else if (cat.includes("clothing") || cat.includes("apparel") || cat.includes("fashion")) {
+                suggestedRate = 12;
+                suggestedHsn = "6109";
+            } else if (cat.includes("luxury")) {
+                suggestedRate = 28;
+                suggestedHsn = "8528";
+            }
+
+            if (forceReassign || data.gstRate === undefined || data.gstRate === null || data.gstRate === "") {
+                updates.gstRate = suggestedRate;
+                updates.hsnCode = suggestedHsn;
             }
             if (data.isReturnable === undefined) {
-                updates.isReturnable = true; // Default legacy products to returnable
+                updates.isReturnable = true;
             }
             if (Object.keys(updates).length > 0) {
                 await updateDoc(doc(db, "products", docItem.id), updates);
@@ -719,7 +1064,7 @@ export const applyDefaultGstToProducts = async (defaultGst = 18) => {
         }
         return { success: true, updatedCount };
     } catch (error) {
-        console.error("Error syncing default GST to products:", error);
+        console.error("Error syncing category GST to products:", error);
         return { success: false, error: error.message };
     }
 };

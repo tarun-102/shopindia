@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Navbar from './Navbar';
 import Footer from "./Footer";
+import ShopAssistantAI from "../ui/ShopAssistantAI";
 import { useEffect, useState } from "react";
 
 import { useDispatch, useSelector } from "react-redux";
@@ -101,6 +102,9 @@ const Layout = () => {
                 <Outlet />
             </main>
             
+            {/* Free Client-Side AI Shopping Assistant & Performance Optimizer */}
+            <ShopAssistantAI />
+
             <Footer />
         </div>
     )

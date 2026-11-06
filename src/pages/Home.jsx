@@ -32,6 +32,14 @@ const Home = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [topProducts, setTopProducts] = useState([]);
   const [isLoadingTopProducts, setIsLoadingTopProducts] = useState(true);
+  const [homeTrackInput, setHomeTrackInput] = useState("");
+
+  const handleHomeTrackSubmit = (e) => {
+    e.preventDefault();
+    if (homeTrackInput.trim()) {
+      navigate(`/track?q=${encodeURIComponent(homeTrackInput.trim())}`);
+    }
+  };
 
   // Filter & Sort Products
   const visibleProducts = useMemo(() => {
@@ -267,6 +275,48 @@ const Home = () => {
                 <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">⚡ Split Checkout</h4>
                 <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">UPI + Card + Wallet + COD</p>
               </div>
+            </div>
+          </section>
+
+          {/* Dedicated Live Order & AWB Tracker Strip */}
+          <section className="relative overflow-hidden p-4 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-500/30 shadow-xl">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 text-left w-full md:w-auto">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 text-indigo-400 flex items-center justify-center shrink-0 shadow-inner">
+                  <Truck size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black text-white">Track Your Shipment Live</h3>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Real-time ShopIndia Prime dispatch, warehouse packaging & courier status.
+                  </p>
+                </div>
+              </div>
+
+              <form 
+                onSubmit={handleHomeTrackSubmit}
+                className="flex items-center gap-2 w-full md:w-auto md:min-w-[380px]"
+              >
+                <div className="flex-1 flex items-center bg-black/60 rounded-xl px-3.5 py-2.5 border border-white/20 focus-within:border-indigo-400">
+                  <Search size={15} className="text-slate-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    value={homeTrackInput}
+                    onChange={(e) => setHomeTrackInput(e.target.value)}
+                    placeholder="Enter Order ID or AWB Tracking #"
+                    className="w-full bg-transparent text-xs text-white placeholder:text-slate-400 outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 cursor-pointer"
+                >
+                  Track
+                </button>
+              </form>
             </div>
           </section>
 

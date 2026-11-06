@@ -7,12 +7,76 @@
 export const DEFAULT_GST_RATE = 18;
 
 export const GST_RATE_OPTIONS = [
-  { label: "0% (Exempt / Daily Essentials)", value: 0 },
-  { label: "5% (Essential Commodities)", value: 5 },
-  { label: "12% (Standard Low Goods)", value: 12 },
-  { label: "18% (Standard Electronics & Apparel)", value: 18 },
-  { label: "28% (Luxury & High-End Tech)", value: 28 },
+  { 
+    label: "0% - Daily Essentials & Fresh Farm Food (Exempt, HSN 0701)", 
+    shortLabel: "0% Exempt (Daily Essentials)", 
+    value: 0,
+    hsn: "0701",
+    category: "Fresh Food & Daily Essentials"
+  },
+  { 
+    label: "5% - Packaged Food, Groceries, Spices & Tea (5% GST, HSN 0901/1905)", 
+    shortLabel: "5% (Food & Groceries)", 
+    value: 5,
+    hsn: "1905",
+    category: "Groceries & Packaged Food"
+  },
+  { 
+    label: "12% - Processed Food, Dairy, Ghee & Apparel (12% GST, HSN 0405/2106)", 
+    shortLabel: "12% (Processed Food & Apparel)", 
+    value: 12,
+    hsn: "2106",
+    category: "Processed Food & Apparel"
+  },
+  { 
+    label: "18% - Electronics, Mobiles, Computers & Audio (Standard 18% GST, HSN 8517/8471)", 
+    shortLabel: "18% Standard (Electronics & Mobiles)", 
+    value: 18,
+    hsn: "8517",
+    category: "Electronics & Tech"
+  },
+  { 
+    label: "28% - Luxury Electronics, Consoles & Premium Tech (28% GST, HSN 8528/8415)", 
+    shortLabel: "28% (Luxury & Premium Tech)", 
+    value: 28,
+    hsn: "8528",
+    category: "Luxury Electronics"
+  },
 ];
+
+export const CATEGORY_GST_MAP = {
+  groceries: 5,
+  food: 5,
+  "food-groceries": 5,
+  smartphones: 18,
+  laptops: 18,
+  tablets: 18,
+  audio: 18,
+  wearables: 18,
+  cameras: 18,
+  gaming: 18,
+  "home-appliances": 18,
+  "mens-clothing": 12,
+  "womens-clothing": 12,
+  fashion: 12,
+  apparel: 12,
+  luxury: 28,
+  daily: 0
+};
+
+export const getSuggestedGstRate = (categorySlug = "") => {
+  if (!categorySlug) return 18;
+  const slug = String(categorySlug).toLowerCase().trim();
+  for (const [key, rate] of Object.entries(CATEGORY_GST_MAP)) {
+    if (slug.includes(key)) return rate;
+  }
+  return 18;
+};
+
+export const getSuggestedHsn = (rate = 18) => {
+  const match = GST_RATE_OPTIONS.find(opt => opt.value === Number(rate));
+  return match?.hsn || "8517";
+};
 
 /**
  * Calculates taxable value, CGST, SGST, and total GST for a single line item.

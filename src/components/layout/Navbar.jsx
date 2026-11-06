@@ -244,6 +244,18 @@ const Navbar = () => {
                 Home
               </NavLink>
 
+              <NavLink 
+                to="/track" 
+                className={({ isActive }) => `px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                  isActive 
+                    ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black" 
+                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                }`}
+              >
+                <Truck size={15} />
+                <span>Track</span>
+              </NavLink>
+
               {/* Admin Panel Badge Link */}
               {isAdminUser && (
                 <NavLink 
@@ -277,7 +289,7 @@ const Navbar = () => {
               {user ? (
                 <>
                   <NavLink 
-                    to="/profile" 
+                    to="/orders" 
                     className={({ isActive }) => `px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
                       isActive 
                         ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black" 
@@ -298,6 +310,18 @@ const Navbar = () => {
                   >
                     <WalletCards size={16} />
                     <span>Wallet</span>
+                  </NavLink>
+
+                  <NavLink 
+                    to="/profile" 
+                    className={({ isActive }) => `px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                      isActive 
+                        ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black" 
+                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+                    }`}
+                  >
+                    <UserRound size={16} />
+                    <span>Account</span>
                   </NavLink>
 
                   <NavLink 
@@ -577,6 +601,38 @@ const Navbar = () => {
                 </NavLink>
 
                 <NavLink
+                  to="/track"
+                  onClick={() => setIsDrawerOpen(false)}
+                  className={({ isActive }) => `flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-sm transition-colors ${
+                    isActive 
+                      ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" 
+                      : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Truck size={18} className="text-indigo-500" />
+                    <span>Live Order Tracker</span>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-400" />
+                </NavLink>
+
+                <NavLink
+                  to={user ? "/orders" : "/login"}
+                  onClick={() => setIsDrawerOpen(false)}
+                  className={({ isActive }) => `flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-sm transition-colors ${
+                    isActive 
+                      ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" 
+                      : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Package size={18} />
+                    <span>My Orders & Tracking</span>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-400" />
+                </NavLink>
+
+                <NavLink
                   to={user ? "/profile" : "/login"}
                   onClick={() => setIsDrawerOpen(false)}
                   className={({ isActive }) => `flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-sm transition-colors ${
@@ -587,7 +643,7 @@ const Navbar = () => {
                 >
                   <div className="flex items-center gap-3">
                     <UserRound size={18} />
-                    <span>My Orders & Profile</span>
+                    <span>My Account & Address</span>
                   </div>
                   <ChevronRight size={16} className="text-slate-400" />
                 </NavLink>
@@ -694,14 +750,17 @@ const Navbar = () => {
             <span>Home</span>
           </NavLink>
 
-          <button 
-            type="button"
-            onClick={() => setIsDrawerOpen(true)}
-            className="flex flex-col items-center gap-0.5 py-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 transition-all hover:text-indigo-600 cursor-pointer"
+          <NavLink 
+            to={user ? "/orders" : "/login"}
+            className={({ isActive }) => `flex flex-col items-center gap-0.5 py-1 text-[10px] font-bold transition-all ${
+              isActive 
+                ? "text-indigo-600 dark:text-indigo-400 scale-105" 
+                : "text-slate-500 dark:text-slate-400"
+            }`}
           >
-            <LayoutGrid size={20} />
-            <span>Menu</span>
-          </button>
+            <Package size={20} />
+            <span>Orders</span>
+          </NavLink>
 
           {isAdminUser ? (
             <NavLink 

@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { calculateOrderTax, numberToWordsINR } from "./taxUtils";
 import { formatPrice } from "./priceFormatter";
+import { getOrderTrackingNumber, getOrderCarrier } from "../services/productservices";
 
 /**
  * Generates and triggers instant browser download of official Indian GST Tax Invoice as a PDF file.
@@ -25,8 +26,8 @@ export const downloadInvoicePDF = (order) => {
   const invoiceNumber = `INV-${new Date().getFullYear()}-${(order.id || "0000").slice(0, 8).toUpperCase()}`;
 
   // Page geometry
-  const leftMargin = 14;
-  const rightMargin = 196;
+  const leftMargin = 12;
+  const rightMargin = 194;
   const pageWidth = 210;
   let y = 14;
 
@@ -66,6 +67,9 @@ export const downloadInvoicePDF = (order) => {
   doc.text("GSTIN: 24AAACS1429B1Z8 | State: 24-Gujarat | CIN: U52100GJ2026PTC109876", leftMargin, y + 3.5);
   doc.text("Customer Support: support@shopindia.in | Helpline: 1800-SHOP-INDIA", leftMargin, y + 7);
 
+  const trackingNumber = getOrderTrackingNumber(order);
+  const carrierName = getOrderCarrier(order);
+
   doc.setFont("helvetica", "bold");
   doc.setTextColor(17, 24, 39);
   doc.text(`Invoice No: ${invoiceNumber}`, 130, y);
@@ -73,9 +77,11 @@ export const downloadInvoicePDF = (order) => {
   doc.setTextColor(71, 85, 105);
   doc.text(`Invoice Date: ${invoiceDate}`, 130, y + 3.5);
   doc.text(`Order ID: #${order.id}`, 130, y + 7);
-  doc.text(`Place of Supply: 24-Gujarat`, 130, y + 10.5);
+  doc.text(`AWB Track: ${trackingNumber}`, 130, y + 10.5);
+  doc.text(`Carrier: ${carrierName.slice(0, 24)}`, 130, y + 14);
+  doc.text(`Place of Supply: 24-Gujarat`, 130, y + 17.5);
 
-  y += 14;
+  y += 21;
 
   // Divider Line
   doc.setDrawColor(226, 232, 240);
@@ -115,62 +121,50 @@ export const downloadInvoicePDF = (order) => {
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(16, 185, 129); // Green
-  doc.text(`Payment: ${order.paymentMethod === 'cod' ? 'Payment on Delivery' : 'Paid & Verified ✓'}`, 120, y + 13);
+  doc.text(`Payment: ${order.paymentMethod === 'cod' ? 'Payment on Delivery' : 'Paid & Verified [OK]'}`, 120, y + 13);
   doc.setTextColor(71, 85, 105);
   doc.text(`Status: ${order.status || "Confirmed"}`, 120, y + 17);
 
   y += 24;
 
-  // 3. Itemized Tax Invoice Table
-  doc.setFillColor(241, 245, 249);
-  doc.rect(leftMargin, y, rightMargin - leftMargin, 7, "F");
-  doc.setDrawColor(203, 213, 225);
-  doc.rect(leftMargin, y, rightMargin - leftMargin, 7, "D");
+  // 3. Itemized Tax Invoice Table (Precise column grid to prevent any cut-off)
+  const drawTableHeader = (posY) => {
+    doc.setFillColor(241, 245, 249);
+    doc.rect(leftMargin, posY, rightMargin - leftMargin, 7, "F");
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(leftMargin, posY, rightMargin - leftMargin, 7, "D");
 
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(51, 65, 85);
+    doc.setFontSize(6.8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(51, 65, 85);
 
-  doc.text("#", leftMargin + 2, y + 4.5);
-  doc.text("ITEM DESCRIPTION", leftMargin + 8, y + 4.5);
-  doc.text("HSN", leftMargin + 72, y + 4.5);
-  doc.text("QTY", leftMargin + 92, y + 4.5);
-  doc.text("RATE (Rs.)", leftMargin + 104, y + 4.5);
-  doc.text("TAXABLE (Rs.)", leftMargin + 122, y + 4.5);
-  doc.text("CGST (Rs.)", leftMargin + 146, y + 4.5);
-  doc.text("SGST (Rs.)", leftMargin + 164, y + 4.5);
-  doc.text("TOTAL (Rs.)", leftMargin + 182, y + 4.5);
+    doc.text("#", 15.5, posY + 4.5, { align: "center" });
+    doc.text("ITEM DESCRIPTION", 20, posY + 4.5);
+    doc.text("HSN", 76, posY + 4.5, { align: "center" });
+    doc.text("QTY", 89, posY + 4.5, { align: "center" });
+    doc.text("RATE (Rs.)", 108, posY + 4.5, { align: "right" });
+    doc.text("TAXABLE (Rs.)", 127, posY + 4.5, { align: "right" });
+    doc.text("CGST (Rs.)", 146, posY + 4.5, { align: "right" });
+    doc.text("SGST (Rs.)", 165, posY + 4.5, { align: "right" });
+    doc.text("TOTAL (Rs.)", 188, posY + 4.5, { align: "right" });
+  };
 
+  drawTableHeader(y);
   y += 7;
 
   // Table Rows
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
 
   items.forEach((item, index) => {
     // Page overflow safety
     if (y > 240) {
       doc.addPage();
       y = 15;
-      doc.setFillColor(241, 245, 249);
-      doc.rect(leftMargin, y, rightMargin - leftMargin, 7, "F");
-      doc.setDrawColor(203, 213, 225);
-      doc.rect(leftMargin, y, rightMargin - leftMargin, 7, "D");
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(51, 65, 85);
-      doc.text("#", leftMargin + 2, y + 4.5);
-      doc.text("ITEM DESCRIPTION", leftMargin + 8, y + 4.5);
-      doc.text("HSN", leftMargin + 72, y + 4.5);
-      doc.text("QTY", leftMargin + 92, y + 4.5);
-      doc.text("RATE (Rs.)", leftMargin + 104, y + 4.5);
-      doc.text("TAXABLE (Rs.)", leftMargin + 122, y + 4.5);
-      doc.text("CGST (Rs.)", leftMargin + 146, y + 4.5);
-      doc.text("SGST (Rs.)", leftMargin + 164, y + 4.5);
-      doc.text("TOTAL (Rs.)", leftMargin + 182, y + 4.5);
+      drawTableHeader(y);
       y += 7;
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
+      doc.setFontSize(7.2);
     }
 
     const isEven = index % 2 === 0;
@@ -190,25 +184,25 @@ export const downloadInvoicePDF = (order) => {
     const halfGst = Math.round((totalGst / 2) * 100) / 100;
 
     doc.setTextColor(71, 85, 105);
-    doc.text(String(index + 1), leftMargin + 2, y + 4.5);
+    doc.text(String(index + 1), 15.5, y + 4.5, { align: "center" });
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(17, 24, 39);
-    const itemTitle = (item.title || item.name || "Product").slice(0, 32);
-    doc.text(itemTitle, leftMargin + 8, y + 4.5);
+    const itemTitle = (item.title || item.name || "Product").slice(0, 28);
+    doc.text(itemTitle, 20, y + 4.5);
 
     doc.setFont("helvetica", "normal");
     doc.setTextColor(71, 85, 105);
-    doc.text(String(item.hsnCode || item.hsn || "8517"), leftMargin + 72, y + 4.5);
-    doc.text(String(item.quantity || 1), leftMargin + 94, y + 4.5);
-    doc.text(formatPrice(item.price || lineTotal), leftMargin + 104, y + 4.5);
-    doc.text(formatPrice(taxable), leftMargin + 124, y + 4.5);
-    doc.text(`${formatPrice(halfGst)} (${rate/2}%)`, leftMargin + 144, y + 4.5);
-    doc.text(`${formatPrice(halfGst)} (${rate/2}%)`, leftMargin + 162, y + 4.5);
+    doc.text(String(item.hsnCode || item.hsn || "8517"), 76, y + 4.5, { align: "center" });
+    doc.text(String(item.quantity || 1), 89, y + 4.5, { align: "center" });
+    doc.text(formatPrice(item.price || lineTotal), 108, y + 4.5, { align: "right" });
+    doc.text(formatPrice(taxable), 127, y + 4.5, { align: "right" });
+    doc.text(`${formatPrice(halfGst)} (${rate/2}%)`, 146, y + 4.5, { align: "right" });
+    doc.text(`${formatPrice(halfGst)} (${rate/2}%)`, 165, y + 4.5, { align: "right" });
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(17, 24, 39);
-    doc.text(formatPrice(lineTotal), leftMargin + 182, y + 4.5);
+    doc.text(formatPrice(lineTotal), 188, y + 4.5, { align: "right" });
 
     y += 7;
   });
@@ -222,7 +216,7 @@ export const downloadInvoicePDF = (order) => {
   }
 
   // 4. Totals Summary Box
-  const summaryX = 115;
+  const summaryX = 110;
   const summaryWidth = rightMargin - summaryX;
 
   doc.setFillColor(248, 250, 252);
@@ -286,22 +280,22 @@ export const downloadInvoicePDF = (order) => {
   doc.text("3. All disputes are subject to Ahmedabad, Gujarat jurisdiction.", leftMargin, y + 9.5);
 
   // Digital Signature / Stamp
-  const stampX = 148;
+  const stampX = 140;
   doc.setDrawColor(79, 70, 229);
   doc.setLineWidth(0.5);
-  doc.roundedRect(stampX, y - 2, 48, 14, 2, 2, "D");
+  doc.roundedRect(stampX, y - 2, 52, 14, 2, 2, "D");
 
   doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(79, 70, 229);
-  doc.text("SHOPINDIA RETAIL", stampX + 8, y + 3);
+  doc.text("SHOPINDIA RETAIL", stampX + 10, y + 3);
   doc.setFontSize(6);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(16, 185, 129);
-  doc.text("Digitally Signed & Verified ✓", stampX + 6, y + 7);
+  doc.text("Digitally Signed & Verified [OK]", stampX + 7, y + 7);
   doc.setFontSize(6);
   doc.setTextColor(100, 116, 139);
-  doc.text("Authorized Signatory", stampX + 11, y + 10.5);
+  doc.text("Authorized Signatory", stampX + 13, y + 10.5);
 
   // Trigger immediate browser file download
   const cleanId = (order.id || "order").slice(0, 8);

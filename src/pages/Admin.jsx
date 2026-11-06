@@ -4,11 +4,13 @@ import { useSelector } from "react-redux";
 import { 
   addProductToDB, getAllProducts, deleteProductFromDB, updateProductInDB, updateProductStock,
   getAllOrders, cancelOrderInDB, deleteOrderFromDB, updateOrderStatusInDB,
-  approveReturnInDB, rejectReturnInDB, applyDefaultGstToProducts
+  approveReturnInDB, rejectReturnInDB, applyDefaultGstToProducts,
+  markOrderPacked, markOrderDispatched, getOrderTrackingNumber, getOrderCarrier,
+  subscribeAllOrders, formatOrderDate
 } from "../services/productservices";
 import { getAllUsers } from "../services/auth/authService"; 
 import { formatPrice } from "../utils/priceFormatter";
-import { GST_RATE_OPTIONS } from "../utils/taxUtils";
+import { GST_RATE_OPTIONS, getSuggestedGstRate } from "../utils/taxUtils";
 import InvoiceModal from "../components/ui/InvoiceModal";
 import { db } from "../services/firebase";
 import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
@@ -39,7 +41,16 @@ import {
   FileText,
   RefreshCw,
   RotateCcw,
-  Download
+  Download,
+  Sparkles,
+  Copy,
+  Calendar,
+  Activity,
+  Layers,
+  FileSpreadsheet,
+  ArrowUpRight,
+  CheckCircle,
+  ShieldAlert
 } from "lucide-react";
 import { downloadInvoicePDF } from "../utils/invoicePdfGenerator";
 
@@ -97,9 +108,11 @@ const Admin = () => {
   
   // Search & Filters
   const [orderSearchQuery, setOrderSearchQuery] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all"); // 'all' | 'needs-packing' | 'packed' | 'dispatched' | 'delivered' | 'cancelled'
   const [inventorySearchQuery, setInventorySearchQuery] = useState("");
   const [inventoryStockFilter, setInventoryStockFilter] = useState("all"); 
   const [inventoryCategory, setInventoryCategory] = useState("");
+  const [analyticsPeriod, setAnalyticsPeriod] = useState("all"); // 'all' | 'today' | '7days' | '30days'
 
   const [giftModal, setGiftModal] = useState({ show: false, userId: null, userEmail: "", amount: "" });
   const [stockModal, setStockModal] = useState({ show: false, product: null, stock: "", costPrice: "", price: "", gstRate: 18, isReturnable: true });
@@ -163,6 +176,205 @@ const Admin = () => {
     if (totalRevenue === 0) return 0;
     return ((totalOwnerProfit / totalRevenue) * 100).toFixed(1);
   }, [totalOwnerProfit, totalRevenue]);
+
+  // Period-Filtered Analytics (All Time, Today, 7 Days, 30 Days)
+  const periodOrders = useMemo(() => {
+    if (analyticsPeriod === "all") return ordersList;
+    const now = Date.now();
+    return ordersList.filter(o => {
+      const time = new Date(o.date).getTime();
+      if (isNaN(time)) return false;
+      const diff = now - time;
+      if (analyticsPeriod === "today") return diff <= 24 * 60 * 60 * 1000;
+      if (analyticsPeriod === "7days") return diff <= 7 * 24 * 60 * 60 * 1000;
+      if (analyticsPeriod === "30days") return diff <= 30 * 24 * 60 * 60 * 1000;
+      return true;
+    });
+  }, [ordersList, analyticsPeriod]);
+
+  const periodDeliveredOrders = useMemo(() => {
+    return periodOrders.filter((o) => o.status === "Delivered ✅" || o.status === "Delivered" || (o.status?.includes("Deliver") && !o.status?.includes("Out") && !o.status?.includes("Assigning")));
+  }, [periodOrders]);
+
+  const periodRevenue = useMemo(() => {
+    return periodDeliveredOrders.reduce((sum, order) => sum + (Number(order.totalAmount) || 0), 0);
+  }, [periodDeliveredOrders]);
+
+  const periodUnitsSold = useMemo(() => {
+    let units = 0;
+    periodDeliveredOrders.forEach(order => {
+      const items = order.items || order.cartItems || [];
+      items.forEach(i => {
+        units += (Number(i.quantity) || 1);
+      });
+    });
+    return units;
+  }, [periodDeliveredOrders]);
+
+  const periodAOV = useMemo(() => {
+    if (periodDeliveredOrders.length === 0) return 0;
+    return Math.round(periodRevenue / periodDeliveredOrders.length);
+  }, [periodDeliveredOrders, periodRevenue]);
+
+  const periodOwnerProfit = useMemo(() => {
+    let profit = 0;
+    periodDeliveredOrders.forEach(order => {
+      const items = order.items || order.cartItems || [];
+      items.forEach(item => {
+        const prod = productsList.find(p => p.id === item.id || p.id === item.productId);
+        const sellingPrice = Number(item.price || prod?.price || 0);
+        const costPrice = Number(prod?.costPrice ?? (sellingPrice * 0.5)); 
+        const itemProfit = (sellingPrice - costPrice) * (Number(item.quantity) || 1);
+        profit += itemProfit;
+      });
+    });
+    return profit;
+  }, [periodDeliveredOrders, productsList]);
+
+  const periodProfitMargin = useMemo(() => {
+    if (periodRevenue === 0) return 0;
+    return ((periodOwnerProfit / periodRevenue) * 100).toFixed(1);
+  }, [periodOwnerProfit, periodRevenue]);
+
+  // Operational conversion rates & health ratios
+  const fulfillmentRate = useMemo(() => {
+    const valid = ordersList.filter(o => !String(o.status || '').toLowerCase().includes('cancel'));
+    if (valid.length === 0) return 100;
+    return Math.round((deliveredOrders.length / valid.length) * 100);
+  }, [ordersList, deliveredOrders]);
+
+  const cancellationRate = useMemo(() => {
+    if (ordersList.length === 0) return 0;
+    const cancelled = ordersList.filter(o => String(o.status || '').toLowerCase().includes('cancel') || Number(o.orderStage) === -1);
+    return Math.round((cancelled.length / ordersList.length) * 100);
+  }, [ordersList]);
+
+  const returnRate = useMemo(() => {
+    if (deliveredOrders.length === 0) return 0;
+    const returned = ordersList.filter(o => String(o.status || '').toLowerCase().includes('return'));
+    return Math.round((returned.length / deliveredOrders.length) * 100);
+  }, [ordersList, deliveredOrders]);
+
+  // 7-Day Daily Revenue & Orders Trend
+  const last7DaysTrend = useMemo(() => {
+    const days = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dayLabel = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+      const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+
+      const dayOrders = ordersList.filter(o => {
+        const ot = new Date(o.date).getTime();
+        return ot >= dayStart && ot <= dayEnd;
+      });
+
+      const dayDelivered = dayOrders.filter(o => String(o.status || '').toLowerCase().includes('deliver'));
+      const dayRevenue = dayDelivered.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
+
+      days.push({
+        label: dayLabel,
+        orders: dayOrders.length,
+        delivered: dayDelivered.length,
+        revenue: dayRevenue
+      });
+    }
+    return days;
+  }, [ordersList]);
+
+  const max7DayRevenue = useMemo(() => {
+    const max = Math.max(...last7DaysTrend.map(d => d.revenue), 1000);
+    return max;
+  }, [last7DaysTrend]);
+
+  // Category Sales Performance Breakdown
+  const categorySalesBreakdown = useMemo(() => {
+    const catMap = {};
+    deliveredOrders.forEach(order => {
+      const items = order.items || order.cartItems || [];
+      items.forEach(it => {
+        const prod = productsList.find(p => p.id === it.id || p.id === it.productId);
+        const cat = prod?.category || it.category || "Uncategorized";
+        if (!catMap[cat]) {
+          catMap[cat] = { category: cat, revenue: 0, units: 0, ordersCount: 0 };
+        }
+        const pr = Number(it.price || prod?.price || 0);
+        const qty = Number(it.quantity || 1);
+        catMap[cat].revenue += pr * qty;
+        catMap[cat].units += qty;
+        catMap[cat].ordersCount += 1;
+      });
+    });
+
+    return Object.values(catMap).sort((a, b) => b.revenue - a.revenue);
+  }, [deliveredOrders, productsList]);
+
+  // Top VIP Customer Spenders (Customer Lifetime Value)
+  const topCustomerSpenders = useMemo(() => {
+    const spendersMap = {};
+    ordersList.forEach(order => {
+      const uid = order.userId || order.userEmail || "anonymous";
+      if (!spendersMap[uid]) {
+        spendersMap[uid] = {
+          userId: order.userId,
+          email: order.userEmail || order.shipping?.email || "Unknown",
+          name: order.shipping?.name || order.userEmail?.split("@")[0] || "Customer",
+          totalOrders: 0,
+          deliveredOrders: 0,
+          totalSpent: 0
+        };
+      }
+      spendersMap[uid].totalOrders += 1;
+      if (String(order.status || '').toLowerCase().includes('deliver')) {
+        spendersMap[uid].deliveredOrders += 1;
+        spendersMap[uid].totalSpent += Number(order.totalAmount || 0);
+      }
+    });
+
+    return Object.values(spendersMap)
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 5)
+      .map(cust => {
+        const matchedUser = usersList.find(u => u.id === cust.userId || u.email === cust.email);
+        return {
+          ...cust,
+          walletBalance: matchedUser?.wallet?.balance || 0
+        };
+      });
+  }, [ordersList, usersList]);
+
+  // Store Inventory Capital Valuation
+  const inventoryValuation = useMemo(() => {
+    let totalCost = 0;
+    let totalRetail = 0;
+    let outOfStock = 0;
+    let lowStock = 0;
+    let healthyStock = 0;
+
+    productsList.forEach(p => {
+      const stock = Number(p.stock || 0);
+      const retail = Number(p.price || 0);
+      const cost = Number(p.costPrice !== undefined && p.costPrice !== "" ? p.costPrice : retail * 0.5);
+
+      totalCost += cost * stock;
+      totalRetail += retail * stock;
+
+      if (stock === 0) outOfStock += 1;
+      else if (stock <= 5) lowStock += 1;
+      else healthyStock += 1;
+    });
+
+    return {
+      totalCost,
+      totalRetail,
+      potentialProfit: Math.max(0, totalRetail - totalCost),
+      outOfStock,
+      lowStock,
+      healthyStock
+    };
+  }, [productsList]);
 
   // Payment Methods Breakdown (Handling Split & Single)
   const paymentMethodStats = useMemo(() => {
@@ -229,15 +441,104 @@ const Admin = () => {
     };
   }, [ordersList, productsList]);
 
+  const isOrderNeedingPacking = (o) => {
+    const s = String(o?.status || "").toLowerCase();
+    const stage = Number(o?.orderStage);
+    if (
+      s.includes("cancel") || 
+      s.includes("delivered") || 
+      s.includes("packed") || 
+      s.includes("shipping") || 
+      s.includes("dispatched") || 
+      s.includes("out for delivery") || 
+      s.includes("partner assigned") || 
+      s.includes("picked up") || 
+      s.includes("on the way") || 
+      s.includes("return") ||
+      stage >= 2 ||
+      stage === -1
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const needsPackingOrders = useMemo(() => {
+    return ordersList.filter(o => isOrderNeedingPacking(o));
+  }, [ordersList]);
+
+  const packedOrders = useMemo(() => {
+    return ordersList.filter(o => {
+      const s = String(o.status || "").toLowerCase();
+      const stage = Number(o.orderStage);
+      return (s.includes("packed") || s.includes("shipping") || stage === 2) && 
+        !s.includes("cancel") && 
+        !s.includes("delivered") && 
+        !s.includes("on the way") && 
+        !s.includes("dispatched") &&
+        !s.includes("out for delivery");
+    });
+  }, [ordersList]);
+
+  const inTransitOrders = useMemo(() => {
+    return ordersList.filter(o => {
+      const s = String(o.status || "").toLowerCase();
+      return s.includes("dispatched") || s.includes("out for delivery") || s.includes("partner assigned") || s.includes("picked up") || s.includes("on the way");
+    });
+  }, [ordersList]);
+
+  const cancelledOrders = useMemo(() => {
+    return ordersList.filter(o => {
+      const s = String(o.status || "").toLowerCase();
+      return s.includes("cancel") || s.includes("return") || Number(o.orderStage) === -1;
+    });
+  }, [ordersList]);
+
   const filteredOrders = useMemo(() => {
-    if (!orderSearchQuery.trim()) return ordersList;
-    const query = orderSearchQuery.toLowerCase();
-    return ordersList.filter(o => 
-      o.id?.toLowerCase().includes(query) || 
-      o.shipping?.name?.toLowerCase().includes(query) ||
-      o.userEmail?.toLowerCase().includes(query)
-    );
-  }, [ordersList, orderSearchQuery]);
+    let list = [...ordersList];
+
+    if (orderStatusFilter === "needs-packing") {
+      list = list.filter(o => isOrderNeedingPacking(o));
+    } else if (orderStatusFilter === "packed") {
+      list = list.filter(o => {
+        const s = String(o.status || "").toLowerCase();
+        const stage = Number(o.orderStage);
+        return (s.includes("packed") || s.includes("shipping") || stage === 2) && 
+          !s.includes("cancel") && 
+          !s.includes("delivered") && 
+          !s.includes("on the way") && 
+          !s.includes("dispatched") &&
+          !s.includes("out for delivery");
+      });
+    } else if (orderStatusFilter === "dispatched") {
+      list = list.filter(o => {
+        const s = String(o.status || "").toLowerCase();
+        return s.includes("dispatched") || s.includes("out for delivery") || s.includes("partner assigned") || s.includes("picked up") || s.includes("on the way");
+      });
+    } else if (orderStatusFilter === "delivered") {
+      list = list.filter(o => {
+        const s = String(o.status || "").toLowerCase();
+        return s.includes("delivered") || o.status === "Delivered ✅";
+      });
+    } else if (orderStatusFilter === "cancelled") {
+      list = list.filter(o => {
+        const s = String(o.status || "").toLowerCase();
+        return s.includes("cancel") || s.includes("return");
+      });
+    }
+
+    if (orderSearchQuery.trim()) {
+      const query = orderSearchQuery.toLowerCase();
+      list = list.filter(o => 
+        o.id?.toLowerCase().includes(query) || 
+        o.shipping?.name?.toLowerCase().includes(query) ||
+        o.userEmail?.toLowerCase().includes(query) ||
+        o.trackingNumber?.toLowerCase().includes(query)
+      );
+    }
+
+    return list;
+  }, [ordersList, orderStatusFilter, orderSearchQuery]);
 
   const filteredInventory = useMemo(() => {
     let list = [...productsList];
@@ -274,8 +575,20 @@ const Admin = () => {
 
   useEffect(() => {
     fetchProducts();
-    fetchOrders();
     fetchUsers();
+
+    const unsubOrders = subscribeAllOrders(
+      (orders) => {
+        setOrdersList(orders || []);
+      },
+      (err) => {
+        console.error("Orders subscribe err:", err);
+      }
+    );
+
+    return () => {
+      if (typeof unsubOrders === "function") unsubOrders();
+    };
   }, []);
 
   const fetchProducts = async () => {
@@ -490,15 +803,106 @@ const Admin = () => {
     }
   };
 
-  const handleSyncAllGst = async () => {
+  const handleSyncAllGst = async (forceCategorySync = false) => {
     setGstSyncLoading(true);
-    const res = await applyDefaultGstToProducts(18);
+    const res = await applyDefaultGstToProducts(forceCategorySync);
     setGstSyncLoading(false);
     if (res.success) {
-      notify.success("GST Synced! 📜", `Updated ${res.updatedCount} legacy products with 18% standard GST rate.`);
+      notify.success("GST Synced! 📜", `Successfully updated ${res.updatedCount} products with categorized GST rates (Food 5%, Tech 18%, Fashion 12%).`);
       fetchProducts();
     } else {
       notify.error("Sync Failed", res.error || "Unable to sync GST.");
+    }
+  };
+
+  const handlePackOrder = async (orderId) => {
+    const res = await markOrderPacked(orderId);
+    if (res.success) {
+      notify.success("Shipping Order 📦", "Order marked for shipping. AWB tracking active.");
+      fetchOrders();
+    } else {
+      notify.error("Update Failed", res.error || "Could not update order.");
+    }
+  };
+
+  const handleDispatchOrder = async (orderId) => {
+    const res = await markOrderDispatched(orderId);
+    if (res.success) {
+      notify.success("Order Dispatched 🚚", "Consignment handed over to ShopIndia Prime Express / Delivery Partner.");
+      fetchOrders();
+    } else {
+      notify.error("Dispatch Failed", res.error || "Could not dispatch order.");
+    }
+  };
+
+  const handleAdminStatusChange = async (orderId, newStatus) => {
+    if (!orderId || !newStatus) return;
+    const res = await updateOrderStatusInDB(orderId, newStatus);
+    if (res) {
+      setOrdersList(prev => prev.map(o => o.id === orderId ? {
+        ...o,
+        status: newStatus,
+        orderStage: newStatus.includes("Delivered") ? 5 :
+                    newStatus.includes("Out for Delivery") ? 4 :
+                    newStatus.includes("Way") ? 3 :
+                    newStatus.includes("Shipping") ? 2 :
+                    newStatus.includes("Cancel") ? -1 : 1
+      } : o));
+      notify.success("Status Updated! ⚡", `Order #${orderId.slice(0, 6)} updated to ${newStatus}`);
+      fetchOrders();
+    } else {
+      notify.error("Update Failed", "Could not update order status.");
+    }
+  };
+
+  const handleAdminDirectDeliver = async (orderId) => {
+    const res = await updateOrderStatusInDB(orderId, "Delivered ✅");
+    if (res) {
+      setOrdersList(prev => prev.map(o => o.id === orderId ? {
+        ...o,
+        status: "Delivered ✅",
+        orderStage: 5,
+        otpVerified: true,
+        otp: null,
+        deliveredAt: new Date().toISOString()
+      } : o));
+      notify.success("Order Delivered Successfully! 🎉", `Order #${orderId.slice(0, 6)} marked delivered without OTP.`);
+      fetchOrders();
+    } else {
+      notify.error("Delivery Update Failed", "Could not mark order delivered.");
+    }
+  };
+
+  const exportOrdersCSV = () => {
+    try {
+      const headers = ["Order ID", "Date", "Customer Name", "Customer Email", "Address", "PIN", "Total Amount (INR)", "Payment Method", "Status", "AWB Tracking"];
+      const rows = ordersList.map(o => [
+        `"${o.id || ''}"`,
+        `"${o.date ? new Date(o.date).toLocaleString('en-IN') : ''}"`,
+        `"${(o.shipping?.name || '').replace(/"/g, '""')}"`,
+        `"${(o.userEmail || o.shipping?.email || '').replace(/"/g, '""')}"`,
+        `"${(o.shipping?.address || '').replace(/"/g, '""')}"`,
+        `"${o.shipping?.pincode || ''}"`,
+        o.totalAmount || 0,
+        `"${o.paymentMethod || 'cod'}"`,
+        `"${(o.status || '').replace(/"/g, '""')}"`,
+        `"${getOrderTrackingNumber(o)}"`
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `ShopIndia_Orders_Analytics_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      notify.success("Orders CSV Exported! 📊", `${ordersList.length} records exported`);
+    } catch (err) {
+      console.error("CSV export err:", err);
+      notify.error("Export Failed", "Could not generate CSV file.");
     }
   };
 
@@ -508,6 +912,7 @@ const Admin = () => {
 
     if (actionType === "CANCEL_ORDER") {
       const res = await cancelOrderInDB(id, { isAdmin: true });
+      setOrdersList(prev => prev.map(o => o.id === id ? { ...o, status: "Cancelled 🔴", orderStage: -1 } : o));
       fetchOrders(); 
       if (res.refunded) {
         notify.refund(res.refundAmount, id);
@@ -615,17 +1020,17 @@ const Admin = () => {
               {/* GST Rate & 7-Day Return Policy */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">GST Rate (%)</label>
+                  <label className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">GST Rate & Category</label>
                   <select
                     value={stockModal.gstRate !== undefined ? stockModal.gstRate : 18}
                     onChange={(e) => setStockModal({ ...stockModal, gstRate: Number(e.target.value) })}
                     className="w-full mt-1 px-3 py-2.5 rounded-xl border border-blue-300 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-900 dark:text-blue-300 font-bold outline-none text-xs"
                   >
-                    <option value={0}>0% (Tax-Free)</option>
-                    <option value={5}>5% (Essential)</option>
-                    <option value={12}>12% (Standard)</option>
-                    <option value={18}>18% (Most Tech/Goods)</option>
-                    <option value={28}>28% (Luxury/Auto)</option>
+                    {GST_RATE_OPTIONS.map((g) => (
+                      <option key={g.value} value={g.value}>
+                        {g.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -733,60 +1138,254 @@ const Admin = () => {
       {activeTab === "analytics" && (
         <div className="space-y-6 animate-fade-in">
           
-          {/* Top 6 KPI Metric Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Revenue</p>
-              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹{formatPrice(totalRevenue)}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Delivered</p>
-            </div>
-            
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Net Profit 💰</p>
-              <h3 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">₹{formatPrice(totalOwnerProfit)}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Margin: {profitMarginPercent}%</p>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Delivered Orders</p>
-              <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{deliveredOrders.length}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Completed</p>
+          {/* Executive Header & Control Bar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <Activity size={20} className="text-emerald-500" />
+                  <span>Store Performance Intelligence & Analytics</span>
+                </h2>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                Real-time sales tracking, 7-day revenue trend, customer lifetime value & inventory valuation.
+              </p>
             </div>
 
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Units Sold 📦</p>
-              <h3 className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{totalUnitsSold}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Items dispatched</p>
-            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Period Filter Pills */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-gray-200 dark:border-slate-700 text-xs">
+                {[
+                  { id: "all", label: "All Time" },
+                  { id: "today", label: "Today" },
+                  { id: "7days", label: "Last 7 Days" },
+                  { id: "30days", label: "Last 30 Days" }
+                ].map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setAnalyticsPeriod(p.id)}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      analyticsPeriod === p.id 
+                        ? "bg-emerald-500 text-white shadow-sm font-black" 
+                        : "text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Avg Order Value</p>
-              <h3 className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">₹{formatPrice(averageOrderValue)}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">AOV metric</p>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Store Users</p>
-              <h3 className="text-xl sm:text-2xl font-black text-teal-600 dark:text-teal-400 mt-1">{usersList.length}</h3>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Registered accounts</p>
+              {/* Export CSV Tool */}
+              <button
+                type="button"
+                onClick={exportOrdersCSV}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                title="Download complete orders spreadsheet (.csv)"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Export CSV 📊</span>
+              </button>
             </div>
           </div>
 
-          {/* Revenue by Payment Method & Category Breakdown */}
+          {/* Top 6 Primary KPI Metric Cards (Driven by Selected Period) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-emerald-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center justify-between">
+                <span>Revenue</span>
+                <span className="text-[9px] text-emerald-500 font-black">Delivered</span>
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹{formatPrice(periodRevenue)}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{analyticsPeriod === 'all' ? 'Lifetime Sales' : `${analyticsPeriod.toUpperCase()} Sales`}</p>
+            </div>
+            
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-indigo-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center justify-between">
+                <span>Net Profit 💰</span>
+                <span className="text-[9px] text-indigo-500 font-black">{periodProfitMargin}% Margin</span>
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">₹{formatPrice(periodOwnerProfit)}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Estimated Net Margin</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-blue-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Delivered Orders</p>
+              <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{periodDeliveredOrders.length}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Completed Handover</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-purple-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Units Sold 📦</p>
+              <h3 className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{periodUnitsSold}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Total Quantity</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-amber-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Avg Order Value</p>
+              <h3 className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">₹{formatPrice(periodAOV)}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">AOV per Order</p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/90 p-4 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm hover:border-teal-500/40 transition-colors">
+              <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase tracking-wider">Store Users</p>
+              <h3 className="text-xl sm:text-2xl font-black text-teal-600 dark:text-teal-400 mt-1">{usersList.length}</h3>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">Registered Accounts</p>
+            </div>
+          </div>
+
+          {/* Operational Conversion & Store Health Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase">Fulfillment Success Rate</p>
+                <h4 className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{fulfillmentRate}%</h4>
+                <p className="text-[10px] text-gray-400">Delivered vs Active Orders</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                🚚
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase">Order Cancellation Rate</p>
+                <h4 className="text-lg font-black text-rose-600 dark:text-rose-400 mt-0.5">{cancellationRate}%</h4>
+                <p className="text-[10px] text-gray-400">Cancelled / Total Orders</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
+                🔴
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase">7-Day Return Rate</p>
+                <h4 className="text-lg font-black text-cyan-600 dark:text-cyan-400 mt-0.5">{returnRate}%</h4>
+                <p className="text-[10px] text-gray-400">Returns / Completed Orders</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold">
+                🔄
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 dark:text-slate-400 font-bold text-[10px] uppercase">Active Catalog Stock</p>
+                <h4 className="text-lg font-black text-purple-600 dark:text-purple-400 mt-0.5">{productsList.length} SKUs</h4>
+                <p className="text-[10px] text-gray-400">Products live on store</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                🏷️
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive 7-Day Revenue & Orders Trend Bar Chart */}
+          <div className="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp size={18} className="text-emerald-500" />
+                  <span>7-Day Daily Revenue & Orders Velocity</span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                  Day-by-day revenue generation and volume throughput over the past week.
+                </p>
+              </div>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Peak Day: ₹{formatPrice(max7DayRevenue)}
+              </span>
+            </div>
+
+            {/* Visual Bar Chart */}
+            <div className="grid grid-cols-7 gap-2 sm:gap-4 items-end h-48 pt-4 pb-2 px-1">
+              {last7DaysTrend.map((day, idx) => {
+                const heightPercent = max7DayRevenue > 0 ? Math.max(12, Math.round((day.revenue / max7DayRevenue) * 100)) : 12;
+                return (
+                  <div key={idx} className="flex flex-col items-center h-full justify-end group">
+                    <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      ₹{formatPrice(day.revenue)}
+                    </span>
+                    <div className="w-full max-w-[36px] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden flex flex-col justify-end h-32 relative shadow-inner">
+                      <div 
+                        className="w-full bg-gradient-to-t from-emerald-600 to-teal-400 rounded-xl transition-all duration-700 group-hover:from-emerald-500 group-hover:to-teal-300 shadow-sm flex items-center justify-center"
+                        style={{ height: `${heightPercent}%` }}
+                      >
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-700 dark:text-slate-300 mt-2 truncate">
+                      {day.label}
+                    </span>
+                    <span className="text-[9px] text-gray-400 dark:text-slate-500 font-mono">
+                      {day.orders} ord.
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Two-Column Analytics Grid: Category Performance + Payment Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             
+            {/* Category Revenue & Volume Performance */}
+            <div className="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Layers size={18} className="text-indigo-500" />
+                  <span>Category Revenue & Share ({categorySalesBreakdown.length})</span>
+                </h3>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Ranked by Sales</span>
+              </div>
+
+              {categorySalesBreakdown.length === 0 ? (
+                <p className="text-gray-400 text-xs py-8 text-center">No category sales recorded yet.</p>
+              ) : (
+                <div className="space-y-3 pt-1 text-xs">
+                  {categorySalesBreakdown.slice(0, 5).map((cat, idx) => {
+                    const sharePercent = totalRevenue > 0 ? Math.round((cat.revenue / totalRevenue) * 100) : 0;
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between items-center font-bold">
+                          <span className="text-gray-800 dark:text-slate-200 capitalize flex items-center gap-1.5">
+                            <span className="text-indigo-500 font-mono text-[10px]">#{idx + 1}</span>
+                            <span>{cat.category}</span>
+                            <span className="text-[10px] text-gray-400 font-normal">({cat.units} sold)</span>
+                          </span>
+                          <span className="text-gray-900 dark:text-white font-mono font-black">
+                            ₹{formatPrice(cat.revenue)} ({sharePercent}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(100, Math.max(8, sharePercent))}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Payment Methods Breakdown */}
             <div className="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <CreditCard size={18} className="text-emerald-500" />
-                <span>Revenue by Payment Method (Single & Split)</span>
-              </h3>
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <CreditCard size={18} className="text-emerald-500" />
+                  <span>Revenue by Payment Method (Single & Split)</span>
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">100% Verified</span>
+              </div>
               
-              <div className="space-y-2.5 pt-1 text-xs">
+              <div className="space-y-3 pt-1 text-xs">
                 {[
                   { label: "Credit / Debit Card", amount: paymentMethodStats.card, color: "bg-blue-500" },
-                  { label: "UPI & QR Scan", amount: paymentMethodStats.upi, color: "bg-emerald-500" },
-                  { label: "ShopIndia Wallet", amount: paymentMethodStats.wallet, color: "bg-indigo-500" },
+                  { label: "UPI & Instant QR Scan", amount: paymentMethodStats.upi, color: "bg-emerald-500" },
+                  { label: "ShopIndia Digital Wallet", amount: paymentMethodStats.wallet, color: "bg-indigo-500" },
                   { label: "Cash on Delivery (COD)", amount: paymentMethodStats.cod, color: "bg-amber-500" }
                 ].map((m, idx) => {
                   const percent = totalRevenue > 0 ? Math.round((m.amount / totalRevenue) * 100) : 0;
@@ -794,7 +1393,7 @@ const Admin = () => {
                     <div key={idx} className="space-y-1">
                       <div className="flex justify-between font-bold">
                         <span className="text-gray-700 dark:text-slate-300">{m.label}</span>
-                        <span className="text-gray-900 dark:text-white">₹{formatPrice(m.amount)} ({percent}%)</span>
+                        <span className="text-gray-900 dark:text-white font-mono">₹{formatPrice(m.amount)} ({percent}%)</span>
                       </div>
                       <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
                         <div className={`h-full ${m.color} rounded-full transition-all duration-500`} style={{ width: `${percent}%` }}></div>
@@ -805,32 +1404,99 @@ const Admin = () => {
               </div>
             </div>
 
-            {/* Order Pipeline Status */}
+          </div>
+
+          {/* Two-Column Grid: VIP Customer Spenders + Inventory Valuation */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            
+            {/* Top VIP Customer Spenders Leaderboard */}
             <div className="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <PieChart size={18} className="text-indigo-500" />
-                <span>Order Status Pipeline ({ordersList.length} Total)</span>
-              </h3>
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Users size={18} className="text-teal-500" />
+                  <span>Top VIP Customer Spenders (Customer LTV)</span>
+                </h3>
+                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase">Top Buyers</span>
+              </div>
 
-              <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
-                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 space-y-1">
-                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Delivered ✅</p>
-                  <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">{orderStatusCounts.delivered}</p>
+              {topCustomerSpenders.length === 0 ? (
+                <p className="text-gray-400 text-xs py-8 text-center">No customer spend recorded.</p>
+              ) : (
+                <div className="space-y-2 text-xs">
+                  {topCustomerSpenders.map((cust, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200/80 dark:border-slate-700/80">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-6 h-6 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 border border-teal-200 dark:border-teal-800 flex items-center justify-center font-black text-[11px] shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 dark:text-white truncate">{cust.name}</p>
+                          <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{cust.email} • {cust.totalOrders} Orders</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <p className="font-black text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm">₹{formatPrice(cust.totalSpent)}</p>
+                          <p className="text-[10px] text-gray-400">Wallet: ₹{formatPrice(cust.walletBalance)}</p>
+                        </div>
+                        {cust.userId && (
+                          <button
+                            type="button"
+                            onClick={() => setGiftModal({ show: true, userId: cust.userId, userEmail: cust.email, amount: "500" })}
+                            className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 border border-teal-200 dark:border-teal-800 cursor-pointer"
+                            title="Gift Store Credits"
+                          >
+                            <Gift size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
 
-                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-1">
-                  <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase">Out for Delivery 🚚</p>
-                  <p className="text-xl font-black text-blue-700 dark:text-blue-300">{orderStatusCounts.outForDelivery}</p>
+            {/* Store Inventory Capital Valuation & Risk Analyzer */}
+            <div className="bg-white dark:bg-slate-900/90 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Boxes size={18} className="text-amber-500" />
+                  <span>Store Inventory Capital & Valuation</span>
+                </h3>
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">Stock Intelligence</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 space-y-0.5">
+                  <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Capital Locked</p>
+                  <p className="text-sm sm:text-base font-black text-gray-900 dark:text-white">₹{formatPrice(inventoryValuation.totalCost)}</p>
+                  <p className="text-[9px] text-gray-400">At Cost Value</p>
                 </div>
-
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-1">
-                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">Pending / Assigning ⏳</p>
-                  <p className="text-xl font-black text-amber-700 dark:text-amber-300">{orderStatusCounts.pending}</p>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 space-y-0.5">
+                  <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Retail Value</p>
+                  <p className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400">₹{formatPrice(inventoryValuation.totalRetail)}</p>
+                  <p className="text-[9px] text-gray-400">Potential Gross</p>
                 </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 space-y-0.5">
+                  <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase">Unrealized Profit</p>
+                  <p className="text-sm sm:text-base font-black text-indigo-600 dark:text-indigo-400">₹{formatPrice(inventoryValuation.potentialProfit)}</p>
+                  <p className="text-[9px] text-gray-400">Projected Margin</p>
+                </div>
+              </div>
 
-                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 space-y-1">
-                  <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase">Cancelled 🔴</p>
-                  <p className="text-xl font-black text-rose-700 dark:text-rose-300">{orderStatusCounts.cancelled}</p>
+              {/* Stock Health Badges */}
+              <div className="space-y-1.5 pt-2 text-xs">
+                <p className="text-[11px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Inventory Health Distribution</p>
+                <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                    🟢 Healthy Stock: {inventoryValuation.healthyStock} SKUs
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                    ⚠️ Low Stock (1-5): {inventoryValuation.lowStock} SKUs
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+                    🔴 Out of Stock: {inventoryValuation.outOfStock} SKUs
+                  </span>
                 </div>
               </div>
             </div>
@@ -975,21 +1641,19 @@ const Admin = () => {
           </div>
 
           {/* GST & 7-Day Return Quick Status Banner */}
-          {productsList.some(p => p.gstRate === undefined || p.gstRate === null) && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
-              <div className="flex items-center gap-2">
-                <AlertCircle size={18} className="text-amber-500 shrink-0" />
-                <span>Notice: Some inventory products are missing GST rates. Apply standard 18% GST and 7-Day return with 1-click.</span>
-              </div>
-              <button
-                onClick={handleSyncAllGst}
-                disabled={gstSyncLoading}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shrink-0 shadow-sm transition-all cursor-pointer disabled:opacity-50"
-              >
-                {gstSyncLoading ? "Syncing..." : "⚡ Sync 18% GST to All"}
-              </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-900 dark:text-indigo-200 text-xs font-bold">
+            <div className="flex items-center gap-2">
+              <Sparkles size={18} className="text-indigo-500 shrink-0" />
+              <span>Categorized GST Ready: Auto-assign Food & Groceries (5%), Apparel (12%), Tech (18%) and 7-Day Return to products.</span>
             </div>
-          )}
+            <button
+              onClick={() => handleSyncAllGst(true)}
+              disabled={gstSyncLoading}
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shrink-0 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            >
+              {gstSyncLoading ? "Syncing..." : "⚡ Auto-Assign Category GST to All"}
+            </button>
+          </div>
 
           {/* Inventory Items Grid */}
           {filteredInventory.length === 0 ? (
@@ -1256,7 +1920,11 @@ const Admin = () => {
                 <label className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase">Category</label>
                 <select 
                   value={product.category} 
-                  onChange={(e) => setProduct({...product, category: e.target.value})} 
+                  onChange={(e) => {
+                    const newCat = e.target.value;
+                    const suggestedGst = getSuggestedGstRate(newCat);
+                    setProduct({ ...product, category: newCat, gstRate: String(suggestedGst) });
+                  }} 
                   required 
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-emerald-500 text-xs sm:text-sm cursor-pointer"
                 >
@@ -1332,12 +2000,12 @@ const Admin = () => {
               
               <button
                 type="button"
-                onClick={handleSyncAllGst}
+                onClick={() => handleSyncAllGst(true)}
                 disabled={gstSyncLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
               >
                 <FileText size={14} />
-                <span>{gstSyncLoading ? "Syncing..." : "Sync 18% GST to Legacy Products"}</span>
+                <span>{gstSyncLoading ? "Syncing..." : "Auto-Assign Category GST (Food 5%, Tech 18%)"}</span>
               </button>
             </div>
 
@@ -1437,17 +2105,82 @@ const Admin = () => {
       {/* ================= TAB 4: ORDERS ================= */}
       {activeTab === "orders" && (
         <div className="space-y-4 animate-fade-in">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">Customer Orders ({ordersList.length})</h3>
-            <div className="w-full sm:w-72 flex items-center bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 px-3 py-2 rounded-xl text-xs shadow-sm focus-within:border-emerald-500">
-              <Search size={14} className="text-gray-400 dark:text-slate-400 mr-2 shrink-0" />
-              <input 
-                type="text" 
-                value={orderSearchQuery} 
-                onChange={(e) => { setOrderSearchQuery(e.target.value); setOrdersPage(1); }} 
-                placeholder="Search Order ID, Customer..." 
-                className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 outline-none"
-              />
+          
+          {/* Action Required Alert Banner for Pending/Confirmed Orders */}
+          {needsPackingOrders.length > 0 && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-950 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-pulse-subtle">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-sm shrink-0">
+                  📦
+                </span>
+                <div>
+                  <h4 className="font-black text-sm sm:text-base">
+                    {needsPackingOrders.length} New Order{needsPackingOrders.length > 1 ? "s" : ""} Waiting for Warehouse Shipping!
+                  </h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Click <strong>"Ship Order 📦"</strong> below to generate ShopIndia Prime AWB label and prepare courier handover.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setOrderStatusFilter("needs-packing"); setOrdersPage(1); }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-sm cursor-pointer whitespace-nowrap shrink-0"
+              >
+                Show {needsPackingOrders.length} New Orders ⚡
+              </button>
+            </div>
+          )}
+
+          {/* Top Bar with Search & Status Tabs */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-gray-900 dark:text-white">Customer Orders</h3>
+                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                  {ordersList.length} Total
+                </span>
+              </div>
+              
+              <div className="w-full sm:w-72 flex items-center bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 px-3 py-2 rounded-xl text-xs shadow-sm focus-within:border-emerald-500">
+                <Search size={14} className="text-gray-400 dark:text-slate-400 mr-2 shrink-0" />
+                <input 
+                  type="text" 
+                  value={orderSearchQuery} 
+                  onChange={(e) => { setOrderSearchQuery(e.target.value); setOrdersPage(1); }} 
+                  placeholder="Search Order ID, Customer, AWB..." 
+                  className="w-full bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-slate-400 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Quick Status Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+              {[
+                { id: "all", label: `All (${ordersList.length})` },
+                { id: "needs-packing", label: `🔥 Needs Shipping (${needsPackingOrders.length})`, highlight: needsPackingOrders.length > 0 },
+                { id: "packed", label: `📦 Shipping Orders (${packedOrders.length})` },
+                { id: "dispatched", label: `🛵 In Transit (${inTransitOrders.length})` },
+                { id: "delivered", label: `✅ Delivered (${deliveredOrders.length})` },
+                { id: "cancelled", label: `🔴 Cancelled (${cancelledOrders.length})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setOrderStatusFilter(tab.id); setOrdersPage(1); }}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    orderStatusFilter === tab.id
+                      ? tab.highlight 
+                        ? "bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20" 
+                        : "bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/20"
+                      : tab.highlight
+                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 font-black animate-pulse"
+                      : "bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-800 hover:bg-gray-100"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -1460,14 +2193,51 @@ const Admin = () => {
               <div className="space-y-3">
                 {paginatedOrders.map((order) => {
                   const isReturnRequested = String(order.status || "").includes("Return Requested");
+                  const trackingId = getOrderTrackingNumber(order);
+                  const statusLower = String(order.status || "").toLowerCase();
+                  const isNeedsPacking = isOrderNeedingPacking(order);
+                  const isPacked = (statusLower.includes("packed") || statusLower.includes("shipping") || Number(order.orderStage) === 2) && 
+                    !statusLower.includes("cancel") && 
+                    !statusLower.includes("delivered") && 
+                    !statusLower.includes("on the way") && 
+                    !statusLower.includes("dispatched") &&
+                    !statusLower.includes("out for delivery");
+                  const isDispatched = statusLower.includes("dispatched") || statusLower.includes("partner assigned") || statusLower.includes("on the way") || statusLower.includes("picked up");
+                  const isOutForDelivery = statusLower.includes("out for delivery");
+                  const isDelivered = statusLower.includes("delivered");
 
                   return (
-                    <div key={order.id} className="bg-white dark:bg-slate-900/90 border border-gray-200/80 dark:border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col justify-between gap-3">
+                    <div key={order.id} className={`bg-white dark:bg-slate-900/90 border p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col justify-between gap-3 transition-all ${
+                      isNeedsPacking ? "border-amber-400/70 dark:border-amber-500/50 ring-1 ring-amber-400/30" : "border-gray-200/80 dark:border-slate-800"
+                    }`}>
                       <div className="flex flex-col sm:flex-row justify-between gap-3 items-start sm:items-center">
                         <div className="space-y-1">
-                          <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || order.userEmail || "Customer"}</p>
-                          <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">ID: {order.id}</p>
-                          <p className="text-[11px] text-gray-500 dark:text-slate-400">Date: {new Date(order.date).toLocaleString('en-IN')}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-sm text-gray-900 dark:text-white">{order.shipping?.name || order.userEmail || "Customer"}</p>
+                            {isNeedsPacking && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider animate-pulse">
+                                Needs Packing 🔥
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[11px] text-gray-400 dark:text-slate-500 font-mono">ID: #{order.id?.slice(0, 8)}</p>
+                            <span className="text-gray-300 dark:text-slate-700">•</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(trackingId);
+                                notify.info("Tracking ID Copied! 📋", trackingId);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                              title="Click to copy AWB Tracking ID"
+                            >
+                              <Truck size={12} />
+                              <span>AWB: {trackingId}</span>
+                              <Copy size={10} />
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400">Date: {formatOrderDate(order.date)}</p>
                           
                           {order.paymentMethod === 'split' && order.paymentBreakdown ? (
                             <div className="flex flex-wrap gap-1 text-[10px] pt-1">
@@ -1486,15 +2256,85 @@ const Admin = () => {
                         </div>
 
                         <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2">
-                          <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border ${
-                            isReturnRequested 
-                              ? "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800 animate-pulse" 
-                              : "bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700"
-                          }`}>
-                            {order.status}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {order.otp && (
+                              <span className="bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 px-2 py-0.5 rounded-md font-mono text-[10px] font-black tracking-wider">
+                                🔐 OTP: {order.otp}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border ${
+                              isReturnRequested 
+                                ? "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800 animate-pulse" 
+                                : isDelivered
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                                : isOutForDelivery
+                                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 animate-pulse"
+                                : isDispatched
+                                ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800"
+                                : isPacked
+                                ? "bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800"
+                                : isNeedsPacking
+                                ? "bg-amber-500 text-slate-950 font-black border-amber-600 shadow-sm"
+                                : "bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                            }`}>
+                              {order.status}
+                            </span>
+                          </div>
                           
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {/* Admin Instant Status Selector Dropdown */}
+                            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg px-2 py-1 shadow-inner">
+                              <span className="text-[10px] font-black uppercase text-gray-500 dark:text-slate-400">Status:</span>
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleAdminStatusChange(order.id, e.target.value)}
+                                className="text-xs font-bold bg-transparent text-gray-900 dark:text-white outline-none cursor-pointer"
+                                title="Admin Direct Status Override"
+                              >
+                                <option value="Order Confirmed 📦" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">1. Order Confirmed 📦</option>
+                                <option value="Shipping Order 📦" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">2. Shipping Order 📦</option>
+                                <option value="Your Order is on the Way 🚚" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">3. On the Way 🚚</option>
+                                <option value="Out for Delivery 🛵" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">4. Out for Delivery 🛵</option>
+                                <option value="Delivered ✅" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">5. Delivered ✅ (No OTP)</option>
+                                <option value="Cancelled 🔴" className="bg-white dark:bg-slate-900 text-gray-900 dark:text-white">Cancelled 🔴</option>
+                              </select>
+                            </div>
+
+                            {/* Prominent Direct Delivery Override Button (Without OTP) */}
+                            {!isDelivered && !order.status?.includes("Cancelled") && (
+                              <button
+                                onClick={() => handleAdminDirectDeliver(order.id)}
+                                className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-1.5 px-3 rounded-lg font-black text-xs transition-transform active:scale-95 shadow-md shadow-emerald-600/20 cursor-pointer"
+                                title="Admin Direct Delivery Override (Without OTP required)"
+                              >
+                                <CheckCircle size={14} />
+                                <span>Mark Delivered ✅ (No OTP)</span>
+                              </button>
+                            )}
+
+                            {/* Order Stage Controls - Ship Order clearly visible */}
+                            {isNeedsPacking && !order.status?.includes("Cancelled") && (
+                              <button
+                                onClick={() => handlePackOrder(order.id)}
+                                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 py-1.5 px-3 rounded-lg font-black text-xs transition-transform active:scale-95 shadow-md shadow-amber-500/20 cursor-pointer"
+                                title="Stage 2: Ship Item & Generate Official AWB Shipping Label"
+                              >
+                                <Package size={14} />
+                                <span>Ship Order 📦</span>
+                              </button>
+                            )}
+
+                            {isPacked && !order.status?.includes("Cancelled") && (
+                              <button
+                                onClick={() => handleDispatchOrder(order.id)}
+                                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white py-1.5 px-3 rounded-lg font-black text-xs transition-transform active:scale-95 shadow-md shadow-blue-600/20 cursor-pointer"
+                                title="Stage 3: Handover to Courier / Dispatch"
+                              >
+                                <Truck size={14} />
+                                <span>Handover Courier 🚚</span>
+                              </button>
+                            )}
+
                             <button
                               onClick={() => {
                                 downloadInvoicePDF(order);
@@ -1515,7 +2355,7 @@ const Admin = () => {
                               <span>View Bill 📄</span>
                             </button>
 
-                            {!order.status?.includes("Cancelled") && !isReturnRequested && (
+                            {!order.status?.includes("Cancelled") && !isReturnRequested && !isDelivered && (
                               <button 
                                 onClick={() => setConfirmDialog({show: true, id: order.id, actionType: "CANCEL_ORDER", message: "Cancel this order and refund prepaid amount to customer wallet?"})} 
                                 className="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 py-1.5 px-2.5 rounded-lg font-bold text-xs hover:bg-amber-500 hover:text-white transition-colors cursor-pointer"
@@ -1533,6 +2373,30 @@ const Admin = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Item Visual Previews for Store Admin / Packer */}
+                      {order.items && Array.isArray(order.items) && order.items.length > 0 && (
+                        <div className="pt-2 border-t border-gray-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
+                          {order.items.map((it, idx) => (
+                            <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-xl border border-gray-200/60 dark:border-slate-700/60">
+                              <img 
+                                src={it.image || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100"} 
+                                alt={it.name || it.title} 
+                                className="w-8 h-8 rounded-lg object-cover bg-white shrink-0 border border-gray-200 dark:border-slate-700" 
+                              />
+                              <div className="max-w-[180px] text-[11px]">
+                                <p className="font-bold text-gray-800 dark:text-slate-200 truncate">{it.name || it.title}</p>
+                                <p className="text-[10px] text-gray-500 dark:text-slate-400">Qty: <span className="font-bold text-indigo-600 dark:text-indigo-400">{it.quantity || 1}</span> • ₹{formatPrice(it.price)}</p>
+                              </div>
+                            </div>
+                          ))}
+                          {order.shipping?.address && (
+                            <span className="text-[11px] text-gray-500 dark:text-slate-400 ml-auto flex items-center gap-1">
+                              📍 {order.shipping.address}, PIN: {order.shipping.pincode || "380001"}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Return Request Action Bar for Store Owner */}
                       {isReturnRequested && (

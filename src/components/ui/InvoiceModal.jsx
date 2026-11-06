@@ -1,8 +1,9 @@
 import React, { useRef } from "react";
 import { formatPrice } from "../../utils/priceFormatter";
 import { calculateOrderTax, numberToWordsINR } from "../../utils/taxUtils";
-import { Download, X, Zap, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Download, X, Zap, ShieldCheck, CheckCircle2, Truck } from "lucide-react";
 import { downloadInvoicePDF } from "../../utils/invoicePdfGenerator";
+import { getOrderTrackingNumber, getOrderCarrier } from "../../services/productservices";
 
 const InvoiceModal = ({ show, onClose, order }) => {
   const invoiceRef = useRef(null);
@@ -83,6 +84,8 @@ const InvoiceModal = ({ show, onClose, order }) => {
               </p>
               <p className="text-slate-500 text-[11px]">Invoice Date: {invoiceDate}</p>
               <p className="text-slate-500 text-[11px]">Order ID: <span className="font-mono font-bold">{order.id}</span></p>
+              <p className="text-indigo-600 font-bold text-[11px] font-mono">AWB: {getOrderTrackingNumber(order)}</p>
+              <p className="text-slate-500 text-[10px]">Carrier: {getOrderCarrier(order)}</p>
               <p className="text-slate-500 text-[11px]">Place of Supply: Gujarat (24)</p>
             </div>
           </div>
@@ -113,8 +116,8 @@ const InvoiceModal = ({ show, onClose, order }) => {
           </div>
 
           {/* Itemized GST Breakdown Table */}
-          <div className="overflow-x-auto border border-slate-200 rounded-xl">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs">
+            <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-600 border-b border-slate-200">
                   <th className="p-2.5 text-center w-8">#</th>
